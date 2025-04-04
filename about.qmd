@@ -1,0 +1,41 @@
+---
+title: "About"
+---
+
+About this site
+
+```{r}
+1 + 1
+```
+
+## more headings
+
+Can I close this
+
+Can I create a tab
+
+what more can I do
+
+blah
+
+blah
+
+blah
+
+# Extra heading
+
+
+```{r}
+plot(1:10)
+```
+
+```{r}
+
+boxplot(1:100, col = 'red')
+
+```
+
+### test heading
+
+
+bjlahlajklajl
