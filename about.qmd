@@ -1,41 +1,21 @@
 ---
-title: "About"
+title: "overview"
 ---
 
-About this site
+## PVA Save our Species Grant
 
-```{r}
-1 + 1
-```
+Action item 3. Develop a reintroduction program based on a population viability analysis.
 
-## more headings
+"To know what is required to guarantee the survival of the species for the next 100 years, we need to integrate our current knowledge into a single framework. The framework will provide guidance on the number of species\[populations\] and individuals that are required to guarantee the survival of the species. A population viability analysis will be used to determine the **number of populations and the number of individuals** within a population required to facilitate the long-term survival of the species. This will allow us to achieve the overall aim within the species recovery plan to improve the long term survival (Criteria 1)."
 
-Can I close this
+## PVA steps
 
-Can I create a tab
+**Steps**:
 
-what more can I do
-
-blah
-
-blah
-
-blah
-
-# Extra heading
-
-
-```{r}
-plot(1:10)
-```
-
-```{r}
-
-boxplot(1:100, col = 'red')
-
-```
-
-### test heading
-
-
-bjlahlajklajl
+-   [x] Population model
+-   [x] Simulate model varying model parameters
+-   [x] Compare to empirical targets
+-   [x] Validated models for future projections
+-   [x] Model future projections
+-   [ ] Model alternative scenarios
+-   [ ] Add genetics

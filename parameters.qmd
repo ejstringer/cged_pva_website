@@ -1,0 +1,71 @@
+---
+title: "parameters"
+---
+
+## Estimates
+
+### Adult survival
+
+Amtech adulat/subadult survival: logit = -0.5738307, sd = 0.2515
+
+survival = 0.36
+
+Ring tanks: 40 initial with 32 surviving two years; 32/40 = 0.8
+
+sqrt(0.8) = yearly survival 0.89
+
+### Juvenile survival
+
+second year hatchlings = 25 with 10-15 surviving
+
+Optimistic juvenile survival = 0.6
+
+Pessimistic juvenile survival = 0.15 (from Wendy Dimonds PVA 0.334<sub>summer</sub> \* 0.443<sub>winter</sub> juvenile survival)
+
+### Transition
+
+transition to SA = 0.194 (from Wendy Dimonds PVA)
+
+### Reproduction
+
+fecundity unknown
+
+clutch size = 5.5 with a range of 4 to 7 (from Wendy Dimonds PVA where she uses a beta(2) distribution)
+
+### Environmental Stoch
+
+Tried to use NDVI and LST but did not have enough predictive power - so envrionmental stochasticity will be estimated.
+
+### Carrying capcity
+
+off handidly set to 50/hectare based on something Brett said in a meeting.
+
+## Model parameters
+
+```{r message=FALSE, warning=FALSE}
+source('./code/04_parameters.R')
+paramter_fxtb
+
+```
+
+### Parameter distributions
+
+```{r fig.width=10, fig.height=12}
+distribution_fig
+```
+
+### Stage matrix
+
+We define a stage matrix to help with defining starting stage distributions from initial adult abundance estimates.
+
+```{r}
+fx_stages
+
+```
+
+### Transition matrix
+
+```{r}
+fx_transition # transition matrix following survival
+
+```
