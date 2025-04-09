@@ -10,6 +10,10 @@ website:
       - about.qmd
       - population.qmd
       - parameters.qmd
+      - model.qmd
+      - validation.qmd
+      - base_model.qmd
+      - scenarios.qmd
 
 format:
   html:

@@ -1,4 +1,4 @@
-
+figprefix <- 'ntg100m'
 
 # load --------------------------------------------------------------------
 em.extract_ASA <- function(sim){
@@ -35,7 +35,7 @@ n_real$ucl_all[n_real$N_all < 1 &n_real$ucl_all==0] <- n_real$N[n_real$N_all < 1
 parameter_estimates <- list()
 
 parameter_estimates[[1]] <- param_starting_estimates
-no.runs <- c(1,1,1,1,1)*10000
+no.runs <- c(1,1,1,2,1)*10000
 topModels <- 100
 nrow(param_starting_estimates)
 head(param_starting_estimates)
@@ -161,7 +161,7 @@ fig_val <- ggplot(n_real, aes(year, N_all, fill = site))+
                     name = 'Real N estimates')+
   scale_colour_manual(values = c('grey20', 'red'),
                       name = 'Top simulated N')+
-  guides(alpha = FALSE)+
+  guides(alpha = 'none')+
   scale_alpha(range = c(0.005,1))+
   theme(panel.grid = element_blank())
 
@@ -176,6 +176,8 @@ param_selected <- param_est[which(rownames(param_est) %in% models_selected),]
 param_selected %>% nrow
 
 apply(param_selected, 2, summary)
+
+saveRDS(param_selected, './output/selected_25models_parameters.RDS')
 apply(param_selected, 2, summary)[4,]
 
 simdf_best %>% 
@@ -196,6 +198,7 @@ ggsave(paste0('./figures/',figprefix, '_validation_models_mean_squred_diff.png')
 parameter_estimates %>% length
 parameter_estimates[[r+2]] <- param_selected
 lapply(parameter_estimates, colnames)
+sapply(parameter_estimates, nrow)
 parameter_estimates2 <- parameter_estimates
 for (j in 1:length(parameter_estimates)) parameter_estimates2[[j]] <- cbind(parameter_estimates[[j]], round = j-1)
 
@@ -215,11 +218,12 @@ paramer_optermisation <- lapply(parameter_estimates2, em.parameters_to_df) %>%
   do.call('rbind', .)
 
 
-paramer_optermisation %>% 
-  ggplot(aes(y=round, x=value, fill = round))+
+paramer_optermisation %>% filter(round != 6) %>%  
+  mutate(round_reordered = 5 - as.numeric(round)) %>% 
+  ggplot(aes(y=round_reordered, x=value, fill = round))+
   geom_boxplot()+
   facet_wrap(type~name, scale = 'free')+
-  scale_fill_manual(values = virid(9)[3:9],
+  scale_fill_manual(values = virid(9)[4:9],
                     name = 'Simulation round')+
   theme_bw()+
   theme(legend.position = 'inside',
@@ -240,18 +244,37 @@ apply(param_selected, 2, summary)
 corparams <- data.frame(cor(param_selected))
 corparams[which(abs(corparams) > 0.5)]
 
-c5 <- apply(corparams, 2, function(x) ifelse(length(which(abs(x)>0.5 & x<1))==0,0,
-                                       which(abs(x)>0.5 & x<1))) %>% 
+c5 <- apply(corparams, 2, function(x) ifelse(length(which(abs(x)>0.4 & x<1))==0,0,
+                                       which(abs(x)>0.4 & x<1))) %>% 
   .[. >0]
-corparams[c5, names(c5)]
+over4 <- round(as.dist(corparams[c5, names(c5)]),2)
+
+#over4[abs(over4) < 0.4] <- 0
+as.dist(cor(param_selected)) %>% 
+  otuSummary::matrixConvert(colname = c('parameter 1', 'parameter 2', 'r')) %>% 
+  filter(abs(r)>0.3) %>% 
+  mutate(r = round(r, 2)) %>% 
+  arrange(abs(r)) %>% 
+  flextable() %>% 
+  autofit() %>% 
+  theme_alafoli() %>% 
+  bg(bg = 'honeydew') %>% 
+  bold(part = 'header') %>% 
+  font(fontname = 'Calibri', part = 'all') %>% 
+  saveRDS('./output/top_correlated_params.RDS')
+
+over4df <- otuSummary::matrixConvert(over4)
+over4df %>% filter(abs(dist)> 0)
 
 data.frame(dist = as.dist(cor(param_selected))) %>% 
   ggplot(aes(dist))+
   geom_histogram(bins = 30, colour = 'black', fill = 'lightgreen')+
   scale_x_continuous(limits = c(-0.8,0.8),
                      breaks = seq(-0.8, 0.8, 0.2))+
+  xlab('r')+
   theme_classic()
 
+ggsave(paste0('./figures/',figprefix, '_validation_parameter_correlation.png'),dpi = 300,
+       height = 6, width = 10, units = 'in')
 
-corrplot(param_selected)
 

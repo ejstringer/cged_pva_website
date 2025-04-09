@@ -1,0 +1,29 @@
+---
+title: "model"
+---
+
+## PVA model overview
+
+![](./imgs/model_overview.PNG)
+
+::: panel-tabset
+### N initial
+
+![](./imgs/N_initial.PNG)
+
+### Survival
+
+![](./imgs/survival.PNG)
+
+### Transition
+
+wendy
+
+### Reproduction
+
+beta
+
+### Carrying capcity
+
+dream
+:::

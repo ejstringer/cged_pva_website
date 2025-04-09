@@ -12,10 +12,10 @@ Action item 3. Develop a reintroduction program based on a population viability 
 
 **Steps**:
 
+-   [x] Populations and model parameters
 -   [x] Population model
 -   [x] Simulate model varying model parameters
--   [x] Compare to empirical targets
--   [x] Validated models for future projections
+-   [x] Compare to empirical targets to validated models for future projections
 -   [x] Model future projections
 -   [ ] Model alternative scenarios
 -   [ ] Add genetics

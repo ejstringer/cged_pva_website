@@ -1,0 +1,43 @@
+---
+title: "validation"
+---
+
+## parameter validation
+
+### Selecting models
+
+Selecting models with lowest mean squared difference.
+
+The difference is calculated by subtracting the true N estimate from the simulated N estimate.
+
+![](./figures/ntg100m_validation_models_mean_squred_diff.png)
+
+### Distribution of parameter estimates
+
+Distribution of parameter estimates from the top models
+
+![](./figures/ntg100m_validation_parameter_estimation.png)
+
+### Parameter correlation
+
+Correlation between parameters
+
+![](./figures/ntg100m_validation_parameter_correlation.png)
+
+```{r}
+library(flextable)
+
+fx_r <- readRDS('./output/top_correlated_params.RDS')
+fx_r
+
+```
+
+
+
+### The top 25 models 
+
+The top 25 models were selected for the final parameter estimates
+
+![](./figures/ntg100m_validation_models_runs.png)
+
+

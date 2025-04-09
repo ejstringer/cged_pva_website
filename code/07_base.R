@@ -21,6 +21,109 @@ em.extract_N <- function(repx, sim){
   return(df_N_overtime)
 }
 
+
+
+
+# load --------------------------------------------------------------------
+figprefix <- 'ntg100m'
+source('./code/05_model.R')
+param_starting_estimates <- readRDS('./output/starting_values.rds')
+stage_distribution <- readRDS('./output/stage_distribution.rds')
+transition_mat <- readRDS('./output/transition_matrix.rds')
+K <- readRDS('./output/carrying_capcity.rds')
+clutch_sizes <- 4:7
+param_selected <- readRDS('./output/selected_25models_parameters.RDS')
+
+# stage distribution ------------------------------------------------------
+
+eigen_analysis <- function(A) {
+  ev <- eigen(A)
+  lmax <- which(Re(ev$values) == max(Re(ev$values)))
+  lambda <- Re(ev$values[lmax])
+  W <- ev$vectors
+  w <- abs(Re(W[, lmax]))
+  stable_age <- w/sum(w)
+  return(list(lambda, stable_age))
+}
+
+fecundity <- (mean(param_selected[,'F_reproduction'])*0.5)*5.5 
+ASAsur <- mean(param_selected[,grep('survival_A', colnames(param_selected))])
+Jt <- mean(param_selected[,'survival_juv'])
+stage.mat <- matrix(c(0, 0, rep(fecundity,3),0,
+                      Jt*0.194, 0, 0, 0,0,0,
+                      Jt*0.806, 0,0,0,0,0,
+                      0, ASAsur,ASAsur, 0,0,0,
+                      0, 0, 0,ASAsur,0,0,
+                      0, 0, 0,0,ASAsur,0), nrow = 6, ncol = 6, byrow = TRUE,
+                    dimnames = list(c('J', 'SA','A1','A2','A3', 'A4'),
+                                    c('J', 'SA','A1','A2','A3', 'A4')))
+
+stage_distribution <- eigen_analysis(stage.mat)[[2]]
+names(stage_distribution)<- c('J', 'SA','A1','A2','A3', 'A4')
+
+as.data.frame(stage.mat) %>% 
+  mutate_if(is.numeric, round, 3) %>% 
+  mutate(stages = rownames(.)) %>% 
+  rbind(c(round(stage_distribution,2),'stable:')) %>% 
+  rbind(c(round(eigen_analysis(stage.mat)[[1]],3), rep(NA,5), 'lambda =')) %>% 
+  relocate(stages) %>% 
+  flextable() %>% 
+  autofit() %>% 
+ # border_remove() %>%
+  vline(j = 1, i = 1:6, part = 'body', border = fp_border_default(width = 1.5)) %>% 
+  vline(j = 1, part = 'header', border = fp_border_default(width = 1.5)) %>% 
+  hline(i = 6, border = fp_border_default(width = 1.5)) %>% 
+  hline(i = 7, j=1:2, border = fp_border_default(width = 1.5)) %>% 
+  vline(i = 8, j = c(2),border = fp_border_default(width = 1.5), part = 'body') %>% 
+  align(j = 1,  align = 'right') %>% 
+  align(part = 'header', j  = 1,align = 'right') %>% 
+  hline(i = 7, border = fp_border_default(width = 1.5)) %>% 
+  hline_bottom(j = 3:7,border = fp_border_default(width = 0)) %>%  
+  vline_left(i = 8, part = 'body', border = fp_border_default(width = 1.5)) %>% 
+  bold(part = 'header') %>% 
+  bold(j = 2, i = 8, part = 'body') %>% 
+  bold(j= 1) %>% 
+  font(part = 'all', fontname='calibri') %>% 
+  saveRDS('./output/new_stage_distribution.rds')
+
+
+# model inputs ------------------------------------------------------------
+
+paramlist <- list(populations = c('CA', 'JE', 'JW', 'MA'),
+initial_ab = round(top25[1:4]), # adult abundance for populations
+survival = top25[6:9], # survival of adults and SA at sites
+survival_J = top25[5], # juvenile survival
+env_stoch = top25[11:14], # sd on survival
+f_reproducing = top25[10], # proportion of females reproducing
+clutch_sizes = clutch_sizes, # clutch size range   
+K = K # carrying capcity applied to adults and SA
+)
+
+
+
+paramlist %>% 
+  do.call('cbind', .) %>% 
+  as.data.frame %>% dplyr::select(-clutch_sizes) %>% 
+  pivot_longer(initial_ab:K) %>% 
+  mutate(value = as.numeric(value),
+         value = round(value, 2),
+         name = ifelse(name =='survival', 'survival_A_SA', name),
+         name = ifelse(name == 'initial_ab', 'N_initial', name),
+         name = gsub('_', ' ', name)) %>% 
+  pivot_wider(names_from = populations, values_from = value) %>% 
+  rename(Parameter = name) %>% 
+  mutate_if(is.double, as.character) %>% 
+  flextable() %>% 
+  autofit() %>%
+  theme_zebra() %>%  
+  hline_bottom(border = fp_border_default(width = 2)) %>% 
+  hline_top(border = fp_border_default(width = 1)) %>%  
+  bold(part = 'header') %>% 
+  bold(j = 1) %>% 
+  font(part = 'all', fontname='calibri') %>% 
+  saveRDS('./output/base_parameter_inputs.rds')
+
+
 # base model --------------------------------------------------------------
 reps_base <- 1000
 top25 <- apply(param_selected, 2, summary)[4,]

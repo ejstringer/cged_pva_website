@@ -1,11 +1,7 @@
 ---
-title: "blahhh"
+title: "CGED PVA"
 ---
 
-This is a Quarto website.
+This is a Quarto website for the CGED PVA
 
 To learn more about Quarto websites visit <https://quarto.org/docs/websites>.
-
-```{r}
-1 + 1
-```
