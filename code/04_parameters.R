@@ -79,7 +79,7 @@ clutch_sizes <- 4:7
 
 # reproductive females ----------------------------------------------------
 
-repro_lower <- 0
+repro_lower <- 0.98
 repro_upper <- 1
 
 sample_data <- randomLHS(reps, 1)
@@ -106,6 +106,19 @@ env_upper <- 0.24 # logit scale
 
 m <- unlogit(qnorm(c(0.025, 0.975), mean = survival_logit, env_upper))
 var10;m;var10-m
+#===================================__
+# approx 20% variation in survival 
+var10 <- c(unlogit(survival_logit)-0.2,unlogit(survival_logit)+0.2)
+survival_logit -logit(var10)
+logit(var10)
+
+env_lower <- 0
+env_upper <- 0.43 # logit scale
+
+m <- unlogit(qnorm(c(0.025, 0.975), mean = survival_logit, env_upper))
+var10;m;var10-m
+
+# sample
 
 sample_data <- randomLHS(reps, nrow(N_start))
 colnames(sample_data) <-paste0('env_stoch_', N_start$site)
@@ -285,3 +298,4 @@ fx_transition<- transition_mat %>%
   bold(j= 1) %>% 
   font(part = 'all', fontname='calibri')  %>% 
   set_caption(caption = 'CGED Transition Matrix');fx_transition
+
