@@ -25,7 +25,6 @@ fx_basepara
 
 ```
 
-
 ### 1000 Model runs showing stages and sites
 
 ![](./figures/ntg100m_base_model_Pops_Stages.png)
