@@ -8,19 +8,25 @@ title: "population"
 source('./code/01_sites.R')
 fxtb
 ```
-NTG buffer set to 100m. This is the assumption that dragons need NTG in their home ranges, and based on home range sizes from Stevens et al. (2010) widest home ranges. 
+
+NTG buffer set to 100m. This is the assumption that dragons need NTG in their home ranges, and based on home range sizes from Stevens et al. (2010) widest home ranges.
 
 ```{r fig.width=10, fig.height=10}
 buffer_metres
 sitemap
 ```
 
-## Observed abundance 
+### Population model schematic
+
+Dimond et al. 2012
+
+![](./imgs/wendy_stage_diagram.png)
+
+## Observed abundance
 
 Summarising abundance estimates from Sarre et al. (in submission) from 2013-2023 and at four primary sites, with adequate sampling for consistent targets to validate models.
 
-Grid abundances summed per site to get a single site estimate. 
-
+Grid abundances summed per site to get a single site estimate.
 
 ```{r, message=FALSE}
 source('./code/02_abundance.R')
@@ -32,15 +38,12 @@ abundanceFig2
 
 **Assumption**: one grid samples a hectare
 
-one grid = 70m * 60m = 4200m<sup>2</sup> = 0.42ha
+one grid = 70m \* 60m = 4200m<sup>2</sup> = 0.42ha
 
-one grid assumed sample area = 100m * 100m = 10000m<sup>2</sup> = 1ha
+one grid assumed sample area = 100m \* 100m = 10000m<sup>2</sup> = 1ha
 
 ```{r, message=FALSE}
 source('./code/03_density.R')
 fxtb_N
 
 ```
-
-
-
