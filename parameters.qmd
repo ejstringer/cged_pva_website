@@ -59,6 +59,7 @@ distribution_fig
 We define a stage matrix to help with defining starting stage distributions from initial adult abundance estimates.
 
 ```{r}
+stagemat_lambda
 fx_stages
 
 ```

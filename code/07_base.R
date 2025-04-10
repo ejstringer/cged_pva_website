@@ -33,7 +33,7 @@ transition_mat <- readRDS('./output/transition_matrix.rds')
 K <- readRDS('./output/carrying_capcity.rds')
 clutch_sizes <- 4:7
 param_selected <- readRDS('./output/selected_25models_parameters.RDS')
-
+param_selecteddf <-readRDS('./output/selected_25models_parameters_df.RDS')
 # stage distribution ------------------------------------------------------
 
 eigen_analysis <- function(A) {
@@ -46,9 +46,14 @@ eigen_analysis <- function(A) {
   return(list(lambda, stable_age))
 }
 
-fecundity <- (mean(param_selected[,'F_reproduction'])*0.5)*5.5 
-ASAsur <- mean(param_selected[,grep('survival_A', colnames(param_selected))])
-Jt <- mean(param_selected[,'survival_juv'])
+# fecundity <- (mean(param_selected[,'F_reproduction'])*0.5)*5.5 
+# ASAsur <- mean(param_selected[,grep('survival_A', colnames(param_selected))])
+# Jt <- mean(param_selected[,'survival_juv'])
+
+fecundity <- (mean(param_selecteddf$mean[param_selecteddf$name == 'F_reproduction'])*0.5)*5.5 
+ASAsur <- mean(param_selecteddf$mean[grep('survival_A', param_selecteddf$name)])
+Jt <- mean(param_selecteddf$mean[grep('survival_J', param_selecteddf$name)])
+
 stage.mat <- matrix(c(0, 0, rep(fecundity,3),0,
                       Jt*0.194, 0, 0, 0,0,0,
                       Jt*0.806, 0,0,0,0,0,
@@ -88,13 +93,13 @@ as.data.frame(stage.mat) %>%
 
 
 # model inputs ------------------------------------------------------------
-
+top25 <- param_selecteddf
 paramlist <- list(populations = c('CA', 'JE', 'JW', 'MA'),
-initial_ab = round(top25[1:4]), # adult abundance for populations
-survival = top25[6:9], # survival of adults and SA at sites
-survival_J = top25[5], # juvenile survival
-env_stoch = top25[11:14], # sd on survival
-f_reproducing = top25[10], # proportion of females reproducing
+initial_ab = round(top25$mean[2:5]), # adult abundance for populations
+survival = top25$mean[10:13], # survival of adults and SA at sites
+survival_J = top25$mean[14:17], # juvenile survival
+env_stoch = top25$mean[6:9], # sd on survival
+f_reproducing = top25$mean[1], # proportion of females reproducing
 clutch_sizes = clutch_sizes, # clutch size range   
 K = K # carrying capcity applied to adults and SA
 )
@@ -126,17 +131,19 @@ paramlist %>%
 
 # base model --------------------------------------------------------------
 reps_base <- 1000
-top25 <- apply(param_selected, 2, summary)[4,]
+#top25 <- apply(param_selected, 2, summary)[4,]
 
 N_sim <- em.pva_simulator(populations = c('CA', 'JE', 'JW', 'MA'),
                           stages = c('J', 'SA','A1','A2','A3', 'A4'),
                           stage_distribution = stage_distribution, 
-                          initial_ab = round(top25[1:4]), # adult abundance for populations
-                          survival = top25[6:9], # survival of adults and SA at sites
-                          survival_J = top25[5], # juvenile survival
-                          env_stoch = top25[11:14], # sd on survival
+                          initial_ab = round(paramlist$initial_ab), # adult abundance for populations
+                          survival = paramlist$survival, # survival of adults and SA at sites
+                          survival_J = paramlist$survival_J, # juvenile survival
+                          survival_logit_sd = NULL,
+                          site_adjust = NULL,
+                          env_stoch = paramlist$env_stoch, # sd on survival
                           transition_mat = transition_mat, # transition prob to SA
-                          f_reproducing = top25[10], # proportion of females reproducing
+                          f_reproducing = paramlist$f_reproducing, # proportion of females reproducing
                           clutch_sizes = clutch_sizes, # clutch size range   
                           K = K, # carrying capcity applied to adults and SA
                           time_steps = 50, # time
@@ -149,9 +156,9 @@ N_sim <- em.pva_simulator(populations = c('CA', 'JE', 'JW', 'MA'),
 N_sim %>% length
 
 
-N_simulated <- lapply(1:reps_base, em.extract_N, N_sim) %>% 
+system.time(N_simulated <- lapply(1:reps_base, em.extract_N, N_sim) %>% 
   do.call('rbind', .) %>% 
-  mutate_if(is.character, factor)
+  mutate_if(is.character, factor))
 nlevels(N_simulated$stage)
 nlevels(N_simulated$pop)
 levels(N_simulated$stage) <- c('J', 'SA', 'A1', 'A2', 'A3', 'A4')
@@ -168,7 +175,7 @@ ggplot(N_simulated, aes(tstep, N+1, group = rep, colour= rep))+
         legend.position = 'none')
 
 ggsave(paste0('./figures/',figprefix, '_base_model_Pops_Stages.png'),dpi = 300,
-       height = 4, width = 7, units = 'in')  
+       height = 6, width = 7, units = 'in')  
 
 # extinction --------------------------------------------------------------
 
@@ -203,6 +210,37 @@ extinction_prob %>%
   mutate(year = tstep +2012,
          Sites = pop) %>%
   ggplot(aes(year, ext_p, colour = Sites))+
+  geom_vline(xintercept = c(2023, 2025), lty = c(3,2), colour = 'grey')+
+  geom_line()+
+  geom_point()+
+  theme_classic()+
+  ylab('Extinction probability')+
+  xlab('Year')+
+  scale_x_continuous(breaks = c(2013, 2025,seq(2010,2060,10)))+
+  scale_y_continuous(breaks = seq(0,1,0.2))
+
+ggsave(paste0('./figures/',figprefix, '_base_model_extinction_noerror.png'),dpi = 300,
+       height = 3.8, width = 7, units = 'in') 
+
+
+extinction_prob_sample <- sim_N_sum %>% ungroup() %>% 
+  mutate(subsample = substr(as.character(rep), 1,1)) %>% 
+  group_by(tstep,pop, subsample) %>% 
+  summarise(sims = n(),
+            sim0 = sum(extinct),
+            ext_p = sum(extinct)/n())
+
+extinction_prob_sample %>%
+  ungroup() %>% 
+  group_by(tstep, pop) %>%
+  summarise(p = mean(ext_p),
+            sd = sd(ext_p),
+            lcl = p - sd*2,
+            ucl = p + sd*2) %>% 
+  mutate(year = tstep +2012,
+         Sites = pop) %>%
+  ggplot(aes(year, p, colour = Sites))+
+  geom_errorbar(aes(ymin = lcl, ymax = ucl), width = 0)+
   geom_vline(xintercept = c(2023, 2025), lty = c(3,2), colour = 'grey')+
   geom_line()+
   geom_point()+

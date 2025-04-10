@@ -48,9 +48,10 @@ sample_data <- randomLHS(reps, 1)
 colnames(sample_data) <- 'survival_juv'
 juv0 <- (juv0_lower + sample_data * (juv0_upper - juv0_lower))
 
-## site adult ------------------
+## site adjust ------------------
 
-survival_logit <- -0.5738307
+survival_logit <- (-0.5738307)
+survival_unlogit <- unlogit(-0.5738307)
 survival_logit_sd <- 0.2515
 
 sample_data <- randomLHS(reps, nrow(N_start))
@@ -59,9 +60,11 @@ site_survival <- sapply(1:nrow(N_start),
                           function(x) unlogit(qnorm(sample_data[,x], 
                                             mean = survival_logit, 
                                             sd = survival_logit_sd)))
+
 head(site_survival)
+site_survival <- sample_data
 class(site_survival)
-colnames(site_survival) <- paste('survival_ASA', N_start$site, sep = '_')
+colnames(site_survival) <- paste('survival_adjust', N_start$site, sep = '_')
 
 site_survival %>% head
 
@@ -79,7 +82,7 @@ clutch_sizes <- 4:7
 
 # reproductive females ----------------------------------------------------
 
-repro_lower <- 0.98
+repro_lower <- 0.5
 repro_upper <- 1
 
 sample_data <- randomLHS(reps, 1)
@@ -153,10 +156,11 @@ parameter_table <- data.frame(site = N_start$site,
                           N_upper = round(apply(initial_N, 2, max)),
                           survivalJ_lower = juv0_lower,
                           survivalJ_upper= juv0_upper,
+                          survivalJ_sd = (survival_logit_sd),
                           survivalSA = unlogit(survival_logit),
-                          survivalSA_sd = unlogit(survival_logit_sd),
+                          survivalSA_sd = (survival_logit_sd),
                           survivalA = unlogit(survival_logit),
-                          survivalA_sd = unlogit(survival_logit_sd),
+                          survivalA_sd = (survival_logit_sd),
                           transition,
                           reproduction_lower = repro_lower,
                           reproduction_upper = repro_upper,
@@ -174,7 +178,7 @@ parameter_table <- data.frame(site = N_start$site,
   arrange(Parameter, site) %>% 
   mutate(site = ifelse(Parameter %in% c('K', 'N'), site, 'All'),
          type = ifelse(is.na(value), 'variable', 'fixed'),
-         type = ifelse(Parameter %in% c('survivalSA','survivalA'),
+         type = ifelse(Parameter %in% c('survivalJ', 'survivalSA','survivalA'),
                        'site variable', type)) %>% 
   rename_all(tolower) %>% 
   mutate_if(is.numeric, round,3) %>% 
@@ -189,7 +193,7 @@ parameter_table <- data.frame(site = N_start$site,
 
 paramter_fxtb <- parameter_table %>% 
   mutate(distribution = c(rep('truncated normal ', 4), 
-                          'uniform', rep('logit normal',2),
+                          'uniform/logit normal', rep('logit normal',2),
                           '', 'uniform', '~beta(2,2)', 'uniform',
                           rep('',4))) %>% 
   flextable() %>% 
@@ -250,6 +254,8 @@ stage.mat <- matrix(c(0, 0, 2.15,2.15,2.15,0,
                                     c('J', 'SA','A1','A2','A3', 'A4')))
 
 stage_distribution <- eigen_analysis(stage.mat)[[2]]
+stagemat_lambda <- eigen_analysis(stage.mat)[[1]]
+
 names(stage_distribution)<- c('J', 'SA','A1','A2','A3', 'A4')
 
 saveRDS(stage_distribution, './output/stage_distribution.rds')

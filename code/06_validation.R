@@ -37,7 +37,7 @@ parameter_estimates <- list()
 parameter_estimates[[1]] <- param_starting_estimates
 no.runs <- c(1,1,1,2,1)*10000
 topModels <- 100
-nrow(param_starting_estimates)
+nrow(parameter_estimates[[1]])
 head(param_starting_estimates)
 
 system.time({for (r in 1:length(no.runs)) {
@@ -58,8 +58,10 @@ N_sim <- lapply(param_dist,
                                                  stages = c('J', 'SA','A1','A2','A3', 'A4'),
                                                  stage_distribution = stage_distribution, 
                                                  initial_ab = unlist(param[1,grep('init', colnames(param))]), # adult abundance for populations
-                                                 survival = unlist(param[1,grep('ASA', colnames(param))]), # survival of adults and SA at sites
-                                                 survival_J = param$survival_juv, # juvenile survival
+                                                 survival = survival_unlogit, # survival of adults and SA at sites
+                                                 survival_J = param$survival_juv,# juvenile survival
+                                                 survival_logit_sd = survival_logit_sd,
+                                                 site_adjust = unlist(param[1,grep('adjust', colnames(param))]),
                                                  env_stoch = unlist(param[1,grep('env_stoch', colnames(param_est))]), # sd on survival
                                                  transition_mat = transition_mat, # transition prob to SA
                                                  f_reproducing = param$F_reproduction, # proportion of females reproducing
@@ -203,9 +205,20 @@ parameter_estimates2 <- parameter_estimates
 for (j in 1:length(parameter_estimates)) parameter_estimates2[[j]] <- cbind(parameter_estimates[[j]], round = j-1)
 
 em.parameters_to_df <- function(param_est){
+  adjusted_param <- param_est[,grep('adjust', colnames(param_est))]
+  back_transform_survival <- unlogit(qnorm(adjusted_param, mean = logit(survival_unlogit), sd = survival_logit_sd))
+  colnames(back_transform_survival) <- sub('adjust','ASA', colnames(back_transform_survival))
   
-  param_est %>% as.data.frame %>%
-    pivot_longer(cols = N_init_CA:env_stoch_MA) %>% 
+  juv_surv <- param_est[,grep('_juv', colnames(param_est))]
+  
+  juv_site_logit <- apply(adjusted_param, 2, function(x) qnorm(x, mean = logit(juv_surv), sd = survival_logit_sd))
+  juv_site_survival <- unlogit(juv_site_logit)
+  colnames(juv_site_survival) <- sub('adjust','J', colnames(juv_site_survival))
+  param_est2 <- cbind(param_est, back_transform_survival)
+  param_est3 <- cbind(param_est2, juv_site_survival)
+  param_est3 %>% as.data.frame %>%
+    relocate(round) %>% 
+    pivot_longer(cols = N_init_CA:survival_J_MA) %>% 
     mutate(type = ifelse(grepl('init', name), 'inititial N', 'value'),
            type = ifelse(grepl('quality', name), 'site quality', type),
            type = ifelse(name %in% c('survival_juv', 'F_reproduction'),
@@ -218,17 +231,26 @@ paramer_optermisation <- lapply(parameter_estimates2, em.parameters_to_df) %>%
   do.call('rbind', .)
 
 
-paramer_optermisation %>% filter(round != 6) %>%  
-  mutate(round_reordered = 5 - as.numeric(round)) %>% 
+paramer_optermisation$name %>% table
+
+paramer_optermisation %>% filter(round != 6, 
+                                 !grepl('adjust', name),
+                                 name != 'survival_ju', 
+                                 name != 'F_reproductio') %>%  
+  mutate(round_reordered = 5 - as.numeric(round),
+         name = ifelse(name == 'F_reproduction',
+                       'xF_reproduction', name),
+         name = ifelse(name == 'survival_juv',
+                       'xSurvival_juv', name)) %>% 
   ggplot(aes(y=round_reordered, x=value, fill = round))+
   geom_boxplot()+
-  facet_wrap(type~name, scale = 'free')+
+  facet_wrap(~name, scale = 'free', ncol = 4)+
   scale_fill_manual(values = virid(9)[4:9],
                     name = 'Simulation round')+
   theme_bw()+
   theme(legend.position = 'inside',
         legend.direction = 'horizontal',
-        legend.position.inside = c(0.75,0.1),
+        legend.position.inside = c(0.75,0.06),
         strip.background = element_blank(),
         strip.text = element_text(face = 'bold'),
         axis.title.y = element_blank(),
@@ -237,22 +259,19 @@ paramer_optermisation %>% filter(round != 6) %>%
         axis.title.x = element_blank())
 
 ggsave(paste0('./figures/',figprefix, '_validation_parameter_estimation.png'),dpi = 300,
-       height = 6, width = 10, units = 'in')
+       height = 7, width = 7, units = 'in')
 
-apply(param_selected, 2, summary)
+paramer_optermisation %>% filter(round == '6') %>% 
+  group_by(name) %>% summarise(mean = mean(value)) %>% 
+  as.data.frame %>% 
+  saveRDS('./output/selected_25models_parameters_df.RDS')
+apply(param_selected, 2, summary)[4,]
 
-corparams <- data.frame(cor(param_selected))
-corparams[which(abs(corparams) > 0.5)]
 
-c5 <- apply(corparams, 2, function(x) ifelse(length(which(abs(x)>0.4 & x<1))==0,0,
-                                       which(abs(x)>0.4 & x<1))) %>% 
-  .[. >0]
-over4 <- round(as.dist(corparams[c5, names(c5)]),2)
 
-#over4[abs(over4) < 0.4] <- 0
 as.dist(cor(param_selected)) %>% 
   otuSummary::matrixConvert(colname = c('parameter 1', 'parameter 2', 'r')) %>% 
-  filter(abs(r)>0.3) %>% 
+  filter(abs(r)>0.4) %>% 
   mutate(r = round(r, 2)) %>% 
   arrange(abs(r)) %>% 
   flextable() %>% 
@@ -263,8 +282,6 @@ as.dist(cor(param_selected)) %>%
   font(fontname = 'Calibri', part = 'all') %>% 
   saveRDS('./output/top_correlated_params.RDS')
 
-over4df <- otuSummary::matrixConvert(over4)
-over4df %>% filter(abs(dist)> 0)
 
 data.frame(dist = as.dist(cor(param_selected))) %>% 
   ggplot(aes(dist))+

@@ -7,6 +7,21 @@ title: "model"
 ![](./imgs/model_overview.PNG)
 
 ::: panel-tabset
+
+### code
+
+```{r}
+source('./code/05_model.R')
+
+em.pva_simulator
+
+em.initial.N
+
+em.juveniles
+
+```
+
+
 ### N initial
 
 ![](./imgs/N_initial.PNG)
@@ -17,13 +32,15 @@ title: "model"
 
 ### Transition
 
-wendy
+![](./imgs/transition.PNG)
 
 ### Reproduction
 
-beta
+![](./imgs/reproduction.PNG)
 
 ### Carrying capcity
 
-dream
+![](./imgs/carrying.PNG)
+
+
 :::

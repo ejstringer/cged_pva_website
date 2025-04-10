@@ -45,7 +45,9 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
                              stage_distribution, 
                              initial_ab, # adult abundance for populations
                              survival, # survival of adults and SA at sites
-                             survival_J, # juvenile survival
+                             survival_J, # juvenile survival per site
+                             survival_logit_sd = NULL,
+                             site_adjust = NULL,
                              env_stoch, # sd on survival
                              transition_mat, # transition prob to SA
                              f_reproducing, # proportion of females reproducing
@@ -62,6 +64,18 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
   N <- array(dim = c(n_stages, n_populations, time_steps, replicates))
   N[, , 1, ] <- initial_abundance
   
+  
+  # survival adjust
+  
+  if(!is.null(site_adjust)){
+    
+    survival <- unlogit(sapply(site_adjust, 
+                   qnorm, mean = logit(survival), sd = survival_logit_sd))
+    survival_J <- unlogit(sapply(site_adjust, 
+                               qnorm, mean = logit(survival_J), 
+                                      sd = survival_logit_sd))
+    
+  }
  
   # for loop replicate (i)
   for (i in 1:replicates) {
@@ -82,7 +96,7 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
       
       survival_J_env <- unlogit(sapply(1:n_populations, 
               function(x) qnorm(p_environment_effect[x],
-                                logit(survival_J),
+                                logit(survival_J[x]),
                                 env_stoch[x])))
       
       
