@@ -26,6 +26,7 @@ em.extract_N <- function(repx, sim){
 
 # load --------------------------------------------------------------------
 figprefix <- 'ntg100m'
+source('./code/00_libraries.R')
 source('./code/05_model.R')
 param_starting_estimates <- readRDS('./output/starting_values.rds')
 stage_distribution <- readRDS('./output/stage_distribution.rds')
@@ -156,7 +157,8 @@ N_sim <- em.pva_simulator(populations = c('CA', 'JE', 'JW', 'MA'),
 N_sim %>% length
 
 
-system.time(N_simulated <- lapply(1:reps_base, em.extract_N, N_sim) %>% 
+system.time(N_simulated <- mclapply(1:reps_base, em.extract_N, N_sim,
+                                    mc.cores = 10) %>% 
   do.call('rbind', .) %>% 
   mutate_if(is.character, factor))
 nlevels(N_simulated$stage)
@@ -176,6 +178,8 @@ ggplot(N_simulated, aes(tstep, N+1, group = rep, colour= rep))+
 
 ggsave(paste0('./figures/',figprefix, '_base_model_Pops_Stages.png'),dpi = 300,
        height = 6, width = 7, units = 'in')  
+
+
 
 # extinction --------------------------------------------------------------
 
@@ -252,3 +256,27 @@ extinction_prob_sample %>%
 
 ggsave(paste0('./figures/',figprefix, '_base_model_extinction.png'),dpi = 300,
        height = 3.8, width = 7, units = 'in') 
+
+
+
+# summary stats -----------------------------------------------------------
+
+## growth rate --------------
+base_summary <- N_simulated %>% 
+  group_by(rep, tstep, pop) %>% 
+  summarise(N = sum(N)) %>% 
+  ungroup() %>% 
+  group_by(pop, rep) %>% 
+  mutate(diff_year = tstep - lag(tstep),
+         diff_growth = N - lag(N),
+         rate_percent = (diff_growth /diff_year)/ lag(N) * 100) %>%
+  ungroup() %>% 
+  group_by(pop) %>% 
+  summarise(base_growth_rate = mean(rate_percent, na.rm = T)) 
+
+  
+base_summary <- extinction_prob %>% 
+  group_by(pop) %>% 
+  summarise(extinction_base = mean(ext_p))
+
+
