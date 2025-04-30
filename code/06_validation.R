@@ -177,6 +177,8 @@ fig_val + scale_y_log10(labels = label_comma())
 ggsave(paste0('./figures/',figprefix, 'validation_models_runs.png'),dpi = 300,
        height = 6, width = 10, units = 'in')
 
+simdf_best_save <- filter(simdf_best, bestx)
+saveRDS(simdf_best_save, './output/top_25_best_fitting_models.rds')
 
 models_selected <- simdf_best$run[which(simdf_best$bestx)] %>% unique()
 param_selected <- param_est[which(rownames(param_est) %in% models_selected),]
