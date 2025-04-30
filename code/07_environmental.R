@@ -56,20 +56,69 @@ real_resid <- do.call(c, lapply(real_models, resid))
 abundance_real$real_resid <- real_resid
 
 abundance_resid <- abundance %>% 
-  left_join(abundance_real) %>% 
-  pivot_longer(sim_resid:real_resid, values_to = 'residual', names_to = 'data_type')
+  left_join(abundance_real[,colnames(abundance_real)!='run'])
 
-ggplot(abundance_resid, aes(exp(residual), fill = data_type))+
-  geom_histogram(alpha = 0.7, colour = 'black')+
-  facet_grid(data_type~site)+
+ggplot(abundance_resid, aes(exp(sim_resid)))+
+  geom_histogram(alpha = 1, fill = 'pink')+
+  geom_histogram(alpha = 0.5, fill = 'forestgreen',
+                 aes(x = exp(real_resid)))+
+  facet_wrap(~site)+
+  scale_x_log10()+
   theme_bw()
 
-format(round(abundance_real$N_all), scientific = FALSE)
-
-abundance_real$run <- 'real'
-ggplot(abundance, aes(tstep, Nsim, colour = site, group = run))+
+abundance_real2 <- abundance_real %>% mutate(run = 'real')
+ggplot(abundance, aes(tstep, Nsim+1, colour = site, group = run))+
   geom_line(linewidth = 0.2)+
-  geom_line(aes(y = N_all), data = abundance_real, colour = 'black')+
+  geom_line(aes(y = N_all+1), data = abundance_real2, colour = 'black')+
   facet_grid(~site)+
+  scale_y_log10()+
   geom_hline(yintercept = 1)+
   theme_bw()
+
+
+
+abundance %>% 
+  mutate(xdiff = N_all-Nsim) %>% 
+  ggplot(aes(abs(xdiff), fill = site))+
+  geom_histogram(colour = 'grey', linewidth = 0.25)+
+  facet_wrap(~site)+
+  theme_bw()
+
+
+abundance %>% 
+  group_by(site, year) %>% 
+  summarise(N_all = mean(N_all),
+            Nsim = mean(Nsim)) %>% 
+  mutate(diff = N_all - Nsim) %>%  
+  pivot_longer(N_all:Nsim) %>% 
+  filter(complete.cases(value)) %>% 
+  ggplot(aes(year, value, colour = name))+
+  geom_line()+
+  facet_wrap(~site, scale = 'free')+
+  theme_bw()+
+  scale_y_log10()
+
+abundance %>% 
+  group_by(site, year) %>% 
+  summarise(N_all = mean(N_all),
+            Nsim = mean(Nsim)) %>% 
+  mutate(diff = log(N_all+1) - log(Nsim+1)) %>% 
+  filter(complete.cases(diff)) %>% 
+  ungroup() %>% 
+  ggplot(aes(diff)) + 
+  geom_histogram()+
+  facet_wrap(~site)+
+  theme_bw()
+
+ggplot(abundance, aes(log(N_all)))+
+  geom_histogram()
+
+
+abundance$N_all %>% log %>% sd
+
+# time to extinction ------------------------------------------------------
+
+abundance
+
+
+
