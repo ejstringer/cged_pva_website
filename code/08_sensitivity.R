@@ -1,22 +1,97 @@
+
+em.extract_N <- function(repx, sim){
+  tstep <- dim(sim)[3]
+  nstage <- dim(sim)[1]
+  npop <- dim(sim)[2]
+  
+  df_N_overtime <- NULL
+  for (ts in 1:tstep) {
+    mat <- sim[,,ts,repx]
+    rownames(mat) <- paste0('stage', 1:nstage)
+    colnames(mat) <- paste0('pop', 1:npop)
+    
+    dfmat <- as.data.frame(mat) %>% 
+      mutate(stage = rownames(mat)) %>% 
+      pivot_longer(cols = colnames(mat),names_to = 'pop', values_to = 'N')
+    dfmat$tstep <- ts
+    dfmat$rep <- repx
+    df_N_overtime <- rbind(df_N_overtime, dfmat)
+    
+  }
+  return(df_N_overtime)
+}
+
+eigen_analysis <- function(A) {
+  ev <- eigen(A)
+  lmax <- which(Re(ev$values) == max(Re(ev$values)))
+  lambda <- Re(ev$values[lmax])
+  W <- ev$vectors
+  w <- abs(Re(W[, lmax]))
+  stable_age <- w/sum(w)
+  return(list(lambda, stable_age))
+}
+
+
+
+# load --------------------------------------------------------------------
+figprefix <- 'ntg100m'
+source('./code/00_libraries.R')
+source('./code/05_model.R')
+param_starting_estimates <- readRDS('./output/starting_values.rds')
+stage_distribution <- readRDS('./output/stage_distribution.rds')
+transition_mat <- readRDS('./output/transition_matrix.rds')
+K <- readRDS('./output/carrying_capcity.rds')
+clutch_sizes <- 4:7
+param_selected <- readRDS('./output/selected_25models_parameters.RDS')
+param_selecteddf <-readRDS('./output/selected_25models_parameters_df.RDS')
+# stage distribution ------------------------------------------------------
+
+
+
+fecundity <- (mean(param_selecteddf$mean[param_selecteddf$name == 'F_reproduction'])*0.5)*5.5 
+ASAsur <- mean(param_selecteddf$mean[grep('survival_A', param_selecteddf$name)])
+Jt <- mean(param_selecteddf$mean[grep('survival_J', param_selecteddf$name)])
+
+stage.mat <- matrix(c(0, 0, rep(fecundity,3),0,
+                      Jt*0.194, 0, 0, 0,0,0,
+                      Jt*0.806, 0,0,0,0,0,
+                      0, ASAsur,ASAsur, 0,0,0,
+                      0, 0, 0,ASAsur,0,0,
+                      0, 0, 0,0,ASAsur,0), nrow = 6, ncol = 6, byrow = TRUE,
+                    dimnames = list(c('J', 'SA','A1','A2','A3', 'A4'),
+                                    c('J', 'SA','A1','A2','A3', 'A4')))
+
+stage_distribution <- eigen_analysis(stage.mat)[[2]]
+names(stage_distribution)<- c('J', 'SA','A1','A2','A3', 'A4')
+
+# model inputs ------------------------------------------------------------
+top25 <- param_selecteddf
+paramlist <- list(populations = c('CA', 'JE', 'JW', 'MA'),
+                  initial_ab = round(top25$mean[2:5]), # adult abundance for populations
+                  survival = top25$mean[10:13], # survival of adults and SA at sites
+                  survival_J = top25$mean[14:17], # juvenile survival
+                  env_stoch = top25$mean[6:9], # sd on survival
+                  f_reproducing = top25$mean[1], # proportion of females reproducing
+                  clutch_sizes = clutch_sizes, # clutch size range   
+                  K = K # carrying capcity applied to adults and SA
+)
+
+
+
+paramlist
+
+# sensitivity -------------------------------------------------------------
+
 original_paramlist <- paramlist
-sim_summary
+
 paramlist 
 
 names(paramlist)
-sim_summary <- N_simulated %>% 
-  group_by(rep, tstep, pop) %>% 
-  summarise(N = sum(N)) %>% 
-  ungroup() %>% 
-  group_by(pop, rep) %>% 
-  mutate(diff_year = tstep - lag(tstep),
-         diff_growth = N - lag(N),
-         rate_percent = (diff_growth /diff_year)/ lag(N) * 100) %>%
-  ungroup() %>% 
-  group_by(pop) %>% 
-  summarise(growth_rate_base = mean(rate_percent, na.rm = T)) 
-sim_summary <- NULL
-seqencedf <- data.frame(parameter = rep(names(paramlist)[2:6], each = 2), ten = c(0.9, 1.1))
 
+sim_summary <- NULL
+seqencedf <- data.frame(parameter = rep(names(paramlist)[2:6], each = 2), 
+                        ten = c(0.9, 1.1))
+base_summary <- readRDS('./output/base_summary_r_ext_p.rds')
 # base model --------------------------------------------------------------
 reps_base <- 1000
 for (i in 1:nrow(seqencedf)) {
@@ -60,31 +135,29 @@ nlevels(N_simulated$pop)
 levels(N_simulated$stage) <- c('J', 'SA', 'A1', 'A2', 'A3', 'A4')
 levels(N_simulated$pop) <- c('CA', 'JE', 'JW', 'MA')
 
-sim_adjusted_lambda <- N_simulated %>% 
+sim_N_sum <- N_simulated %>% 
   group_by(rep, tstep, pop) %>% 
   summarise(N = sum(N)) %>% 
+  mutate(extinct = N < 2)
+
+sum(sim_N_sum$extinct)
+
+sim_adjusted_lambda <- sim_N_sum %>% 
   ungroup() %>% 
   group_by(pop, rep) %>% 
   mutate(diff_year = tstep - lag(tstep),
          diff_growth = N - lag(N),
          rate_percent = (diff_growth /diff_year)/ lag(N) * 100) %>%
   ungroup() %>% 
-  group_by(pop) %>% 
-  summarise(growth_rate = mean(rate_percent, na.rm = T)) %>% 
-  left_join(base_summary)
-
-sim_N_sum <- N_simulated %>% 
-  group_by(rep, tstep, pop) %>% 
-  summarise(N = sum(N)) %>% 
-  mutate(extinct = N < 2)
-sum(sim_N_sum$extinct)
-sim_adjusted_lambda <- sim_N_sum %>% ungroup() %>% 
-  group_by(tstep,pop) %>% 
+  group_by(tstep,pop) %>%
   summarise(sims = n(),
             sim0 = sum(extinct),
-            ext_p = sum(extinct)/n())%>% 
+            ext_p = sum(extinct)/n(),
+            rate = mean(rate_percent, na.rm=T))%>%
+  ungroup() %>%
   group_by(pop) %>% 
-  summarise(extinction = mean(ext_p)) %>% 
+  summarise(growth_rate = mean(rate, na.rm = T),
+            extinction = mean(ext_p)) %>% 
   left_join(base_summary)
 
 sim_adjusted_lambda$parameter <- param_adjust
@@ -93,6 +166,7 @@ sim_adjusted_lambda$adjusted <- adjust
 sim_summary <- bind_rows(sim_summary, sim_adjusted_lambda)
 }
 sim_summary %>% 
+  dplyr::select(-extinction, -extinction_base) %>% 
   pivot_wider(names_from = adjusted, values_from = growth_rate) %>% 
   mutate(S = (`1.1`-`0.9`)/base_growth_rate,
          param2 = rep(c('N', 'Sur', 'Juv', 'Env', 'fem'), each = 4)) %>% 
