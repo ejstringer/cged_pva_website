@@ -46,6 +46,7 @@ fxtb_N <- N_abundances %>%
         border = fp_border_default(width = 1.4, style = 'dashed')) %>% 
   hline_bottom(border = fp_border_default(width = 2));fxtb_N
 
+fxtb_N %>% save_as_image('./figures/density_N_table.png', res = 300)
 
 n_real <- n_sites %>% 
   left_join(area_used)%>%

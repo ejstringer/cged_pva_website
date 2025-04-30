@@ -9,10 +9,3 @@ library(parallel)
 library(flextable)
 library(scales)
 # load --------------------------------------------------------------------
-# mapping
-
-
-
-# captures
-cap <- read.csv('./data/N_estimates.csv')
-

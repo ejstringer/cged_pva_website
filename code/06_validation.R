@@ -1,4 +1,4 @@
-figprefix <- 'ntg100m'
+figprefix <- ''
 
 # load --------------------------------------------------------------------
 em.extract_ASA <- function(sim){
@@ -11,8 +11,9 @@ em.extract_ASA <- function(sim){
 }
 
 em.sample.distribution <- function(x, samplesize = 10000){
+  #https://stats.stackexchange.com/questions/191725/sample-from-distribution-given-by-histogram
   xhist=hist(x,freq=FALSE, col=rgb(0,0,1,1/4))
-  #sample from it
+  # sample from it
   bins=with(xhist,sample(length(mids),samplesize,p=density,replace=TRUE)) # choose a bin
   result=runif(length(bins),xhist$breaks[bins],xhist$breaks[bins+1]) # sample a uniform in it
   hist(result,freq=FALSE,add=TRUE,bord=1, col = rgb(1,0,0,1/4))
@@ -27,6 +28,8 @@ stage_distribution <- readRDS('./output/stage_distribution.rds')
 transition_mat <- readRDS('./output/transition_matrix.rds')
 K <- readRDS('./output/carrying_capcity.rds')
 clutch_sizes <- 4:7
+survival_unlogit <- 0.36
+survival_logit_sd <- 0.2515
 
 n_real <- read.csv('./output/real_abundance_for_comparison.csv')
 n_real$ucl_all[n_real$N_all < 1 &n_real$ucl_all==0] <- n_real$N[n_real$N_all < 1 &n_real$ucl_all==0]*n_real$area_ha[n_real$N_all < 1 &n_real$ucl_all==0]
@@ -40,6 +43,9 @@ topModels <- 100
 nrow(parameter_estimates[[1]])
 head(param_starting_estimates)
 
+
+# run model ---------------------------------------------------------------
+
 system.time({for (r in 1:length(no.runs)) {
   
   
@@ -48,11 +54,11 @@ system.time({for (r in 1:length(no.runs)) {
   param_est <- parameter_estimates[[r]]
 
 
-# run multiple runs -------------------------------------------------------
+## run multiple runs -------------------------------------------------------
 
 
 param_dist <- split(as.data.frame(param_est), rownames(param_est))
-sapply(lapply(param_dist, function(param) param$survival_juv), class)
+sapply(lapply(param_dist, function(param) param$env_stoch), class)
 N_sim <- lapply(param_dist, 
                 function(param) em.pva_simulator(populations = c('CA', 'JE', 'JW', 'MA'),
                                                  stages = c('J', 'SA','A1','A2','A3', 'A4'),
@@ -62,7 +68,7 @@ N_sim <- lapply(param_dist,
                                                  survival_J = param$survival_juv,# juvenile survival
                                                  survival_logit_sd = survival_logit_sd,
                                                  site_adjust = unlist(param[1,grep('adjust', colnames(param))]),
-                                                 env_stoch = unlist(param[1,grep('env_stoch', colnames(param_est))]), # sd on survival
+                                                 env_stoch = NULL, # sd on survival
                                                  transition_mat = transition_mat, # transition prob to SA
                                                  f_reproducing = param$F_reproduction, # proportion of females reproducing
                                                  clutch_sizes = clutch_sizes, # clutch size range   
@@ -71,7 +77,7 @@ N_sim <- lapply(param_dist,
                                                  replicates = 1)
 )
 print(paste('model', r, 'run'))
-# model df ----------------------------------------------------------------
+## model df ----------------------------------------------------------------
 sim_adults <- lapply(N_sim, em.extract_ASA)
 
 
@@ -91,7 +97,7 @@ simdf <- do.call('rbind', simdf_list) %>%
   left_join(n_real, by = c('year', 'site')) %>% 
   mutate(squared_diff = sqrt((N_all - (Nsim))^2))
 
-# best models -------------------------------------------------------------
+## best models -------------------------------------------------------------
 
 
 
@@ -112,7 +118,7 @@ simdf_best %>%
                colour= 'blue', size = 1)+
   theme_classic()
 
-# new params from best models ---------------------------------------------
+## new params from best models ---------------------------------------------
 models_selected <- simdf_best$run[which(simdf_best$bestx)] %>% unique()
 param_selected <- param_est[which(rownames(param_est) %in% models_selected),]
 
@@ -123,7 +129,7 @@ apply(param_selected, 2, summary)[4,]
 
 
 
-# estimate new distributions ----------------------------------------------
+## estimate new distributions ----------------------------------------------
 
 param_prior <- lapply(1:ncol(param_selected), function(x) param_selected[,x])
 names(param_prior) <- colnames(param_selected)
@@ -168,7 +174,7 @@ fig_val <- ggplot(n_real, aes(year, N_all, fill = site))+
   theme(panel.grid = element_blank())
 
 fig_val + scale_y_log10(labels = label_comma())
-ggsave(paste0('./figures/',figprefix, '_validation_models_runs.png'),dpi = 300,
+ggsave(paste0('./figures/',figprefix, 'validation_models_runs.png'),dpi = 300,
        height = 6, width = 10, units = 'in')
 
 
@@ -182,6 +188,7 @@ apply(param_selected, 2, summary)
 saveRDS(param_selected, './output/selected_25models_parameters.RDS')
 apply(param_selected, 2, summary)[4,]
 
+m5perc
 simdf_best %>% 
   ggplot(aes(y = diff))+
   geom_boxplot(fill = 'grey')+
@@ -194,7 +201,7 @@ simdf_best %>%
         axis.text.x = element_blank())+
   xlab('Mean squared difference')
 
-ggsave(paste0('./figures/',figprefix, '_validation_models_mean_squred_diff.png'),dpi = 300,
+ggsave(paste0('./figures/',figprefix, 'validation_models_mean_squred_diff.png'),dpi = 300,
        height = 4, width = 4, units = 'in')
 # parameter optermisation ------------------------------------------------
 parameter_estimates %>% length
@@ -245,7 +252,7 @@ paramer_optermisation %>% filter(round != 6,
   ggplot(aes(y=round_reordered, x=value, fill = round))+
   geom_boxplot()+
   facet_wrap(~name, scale = 'free', ncol = 4)+
-  scale_fill_manual(values = virid(9)[4:9],
+  scale_fill_manual(values = adegenet::virid(9)[4:9],
                     name = 'Simulation round')+
   theme_bw()+
   theme(legend.position = 'inside',
@@ -258,8 +265,8 @@ paramer_optermisation %>% filter(round != 6,
         axis.text.y = element_blank(),
         axis.title.x = element_blank())
 
-ggsave(paste0('./figures/',figprefix, '_validation_parameter_estimation.png'),dpi = 300,
-       height = 7, width = 7, units = 'in')
+ggsave(paste0('./figures/',figprefix, 'validation_parameter_estimation.png'),dpi = 300,
+       height = 7, width = 8, units = 'in')
 
 paramer_optermisation %>% filter(round == '6') %>% 
   group_by(name) %>% summarise(mean = mean(value)) %>% 
@@ -281,7 +288,10 @@ as.dist(cor(param_selected)) %>%
   bold(part = 'header') %>% 
   font(fontname = 'Calibri', part = 'all') %>% 
   saveRDS('./output/top_correlated_params.RDS')
-
+fx_r <- readRDS('./output/top_correlated_params.RDS')
+fx_r %>% save_as_image(paste0('./figures/',figprefix, 
+                              'validation_parameter_cor_top.png'),
+                       res=300)
 
 data.frame(dist = as.dist(cor(param_selected))) %>% 
   ggplot(aes(dist))+
@@ -291,7 +301,10 @@ data.frame(dist = as.dist(cor(param_selected))) %>%
   xlab('r')+
   theme_classic()
 
-ggsave(paste0('./figures/',figprefix, '_validation_parameter_correlation.png'),dpi = 300,
-       height = 6, width = 10, units = 'in')
+ggsave(paste0('./figures/',figprefix, 'validation_parameter_correlation.png'),
+       dpi = 300,
+       height = 6,
+       width = 10,
+       units = 'in')
 
 

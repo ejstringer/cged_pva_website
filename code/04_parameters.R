@@ -82,7 +82,7 @@ clutch_sizes <- 4:7
 
 # reproductive females ----------------------------------------------------
 
-repro_lower <- 0.5
+repro_lower <- 0
 repro_upper <- 1
 
 sample_data <- randomLHS(reps, 1)
@@ -134,8 +134,9 @@ env_stochasticity <- (env_lower + sample_data * (env_upper - env_lower))
 param_est <- cbind(initial_N, 
                    juv0,
                    site_survival,
-                   reproduction, 
-                   env_stochasticity)
+                   reproduction#, 
+                   #env_stochasticity
+                   )
 
 set.seed(54612)
 rownames(param_est) <- paste0(
@@ -207,7 +208,8 @@ autofit() %>%
   bold(part = 'header') %>% 
   font(part = 'all', fontname='calibri');paramter_fxtb
 
-
+paramter_fxtb %>% save_as_image('./figures/parameter_priors_table.png',
+                                res = 300)
 # variable distributions ----------------------------
 param.labs <- c('initial N', 'environmental stoch', 'survival', 'fecundity')
 names(param.labs) <- c('N', 'e','s', 'F')
@@ -216,12 +218,12 @@ names(param.labs) <- c('N', 'e','s', 'F')
 
 distribution_fig <- param_est %>% as.data.frame %>% 
   rename(survival_J= survival_juv) %>% 
-  pivot_longer(cols = N_init_CA:env_stoch_MA) %>% 
-  mutate(type = factor(substr(name, 1,1),levels = c('N', 'e','s', 'F')),
+  pivot_longer(cols = everything()) %>% 
+  mutate(type = factor(substr(name, 1,1),levels = c('N','s', 'F')),
          variable = sub('N_init_', '', name),
          variable = sub('survival_', '', variable),
          variable = sub('env_stoch_', '', variable),
-         variable = sub('F_reproduction', '', variable)) %>% 
+         variable = sub('F_reproduction', '%', variable)) %>% 
   ggplot(aes(x = value, fill = name))+
   geom_histogram(colour = 'black', bins = 30)+
   facet_wrap(type~variable, scale = 'free', 
@@ -232,6 +234,9 @@ distribution_fig <- param_est %>% as.data.frame %>%
         strip.background = element_blank(),
         strip.text = element_text(face = 'bold'));distribution_fig
 
+ggsave('./figures/parameter_priors.png',
+       plot = distribution_fig, dpi = 300,
+       height = 7, width = 10, units = 'in')
 
 # stage matrix ------------------------------------------------------------
 eigen_analysis <- function(A) {
@@ -262,7 +267,7 @@ saveRDS(stage_distribution, './output/stage_distribution.rds')
 
 fx_stages <- as.data.frame(stage.mat) %>% 
   mutate(stages = rownames(.)) %>% 
-  rbind(c(round(stage_distribution,2),'stable:')) %>% 
+  rbind(c(round(stage_distribution,2),'stable:')) %>%
   relocate(stages) %>% 
 flextable() %>% 
   autofit() %>% 
@@ -274,10 +279,13 @@ flextable() %>%
   bold(part = 'header') %>% 
   bold(j= 1) %>% 
   font(part = 'all', fontname='calibri') %>% 
-  set_caption(caption = paste('CGED Stage Matrix ( lamba =',
-                              round(eigen_analysis(stage.mat)[[1]],3), ')'));fx_stages
+  add_footer_lines(paste('lambda:', round(stagemat_lambda,3))) %>%
+  align(part = 'footer', align = 'right') %>% 
+  font(part = "footer", fontname = "Consolas") %>% 
+  bold(bold = T, part = "footer") %>%  
+  set_caption(caption = paste('CGED Stage Matrix'));fx_stages
 
-
+fx_stages %>% save_as_image('./figures/parameter_stage_matrix.png', res = 300)
 
 transition_mat <- matrix(c(0, 0, 0,0,0,0,
                       0.194, 0, 0, 0,0,0,
@@ -305,3 +313,5 @@ fx_transition<- transition_mat %>%
   font(part = 'all', fontname='calibri')  %>% 
   set_caption(caption = 'CGED Transition Matrix');fx_transition
 
+fx_transition %>% 
+  save_as_image('./figures/parameter_transitions.png', res = 300)

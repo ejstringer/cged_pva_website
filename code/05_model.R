@@ -62,7 +62,7 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
                              survival_J, # juvenile survival per site
                              survival_logit_sd = NULL,
                              site_adjust = NULL,
-                             env_stoch, # sd on survival
+                             env_stoch = NULL, # sd on survival
                              transition_mat, # transition prob to SA
                              f_reproducing, # proportion of females reproducing
                              clutch_sizes, # clutch size range   
@@ -70,7 +70,7 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
                              time_steps = 8, # time
                              replicates = 1){
   
-  ## initialise model ------------
+  ## initialise model
   # initial population sizes across stages and sites
   initial_abundance <- em.initial.N(initial_ab, stage_distribution, populations)
   n_stages <- nrow(initial_abundance)
@@ -102,6 +102,10 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
       
       ## survival ---------
       ### environmental stoch (adults and SA) ---------------------------
+      
+      survival_env <- survival
+      survival_J_env <- survival_J
+      if(!is.null(env_stoch)){
       survival_env <- unlogit(sapply(1:n_populations,
                                      function(x) rnorm(1, 
                                                        logit(survival[x]),
@@ -116,6 +120,7 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
               function(x) qnorm(p_environment_effect[x],
                                 logit(survival_J[x]),
                                 env_stoch[x])))
+      }
       
       ### yearly environmental adjusted survival 
       survival_year <- cbind(J= survival_J_env,
@@ -171,31 +176,14 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
         }
         
       }
-      
-    }# }yr
-  }# }i
-  
-  return(N)
-   
+    
+    }
+    
   }
 
-transition_mat2 <- transition_mat
-transition_mat2[6,1] <- transition_mat2[3,1] 
-transition_mat2[3,1] <- 0
-transition_mat2[3:4,2] <- 0.5
+  return(N)
+}
 
-em.pva_simulator(populations = c('CA', 'JE', 'JW', 'MA'),
-                             stages = c('J', 'SA','A1','A2','A3', 'A4'),
-                             stage_distribution, 
-                             initial_ab, # adult abundance for populations
-                             survival, # survival of adults and SA at sites
-                             survival_J, # juvenile survival per site
-                             survival_logit_sd = NULL,
-                             site_adjust = NULL,
-                             env_stoch, # sd on survival
-                             transition_mat2, # transition prob to SA
-                             f_reproducing, # proportion of females reproducing
-                             clutch_sizes, # clutch size range   
-                             K = K, # carrying capcity applied to adults and SA
-                             time_steps = 8, # time
-                             replicates = 1)
+  
+
+

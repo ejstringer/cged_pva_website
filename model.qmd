@@ -2,11 +2,16 @@
 title: "model"
 ---
 
-## PVA model overview
+## PVA model diagram
 
-![](./imgs/model_overview.PNG)
+![](./imgs/model_diagram_N.PNG)
+
+
+
+## Details
 
 ::: panel-tabset
+
 
 ### code
 
@@ -20,7 +25,9 @@ em.initial.N
 em.juveniles
 
 ```
+### overview
 
+![](./imgs/model_overview.PNG)
 
 ### N initial
 
@@ -41,6 +48,4 @@ em.juveniles
 ### Carrying capcity
 
 ![](./imgs/carrying.PNG)
-
-
 :::

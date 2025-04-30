@@ -47,9 +47,11 @@ sitemap <- ggplot()+
   theme_bw()+
   theme(legend.position = 'inside',
         legend.position.inside = c(0.2,0.85),
-        legend.background = element_rect(colour = 'grey'))
+        legend.background = element_rect(colour = 'grey'));sitemap
 
-sitemap
+ggsave('./figures/site_map.png',
+       plot = sitemap,dpi = 300,
+       height = 11, width = 6.5, units = 'in')
 
 # area --------------------------------------------------------------------
 propArea <-  c(expanse(my_buffer,unit = 'ha'),
@@ -82,7 +84,8 @@ fxtb<- dfarea %>% mutate(area_of = ifelse(buffer,
   hline_bottom(border = fp_border_default(width = 2)) %>% 
   hline_top(border = fp_border_default(width = 2))
 
-fxtb
+fxtb %>% autofit %>%  save_as_image('./figures/site_area_table.png', res = 300)
+
 area_used <- dfarea %>% filter(site != 'Bonshaw',
                                # property != 'grid',
                                buffer)

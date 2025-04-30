@@ -25,7 +25,7 @@ em.extract_N <- function(repx, sim){
 
 
 # load --------------------------------------------------------------------
-figprefix <- 'ntg100m'
+figprefix <- ''
 source('./code/00_libraries.R')
 source('./code/05_model.R')
 param_starting_estimates <- readRDS('./output/starting_values.rds')
@@ -97,9 +97,9 @@ as.data.frame(stage.mat) %>%
 top25 <- param_selecteddf
 paramlist <- list(populations = c('CA', 'JE', 'JW', 'MA'),
 initial_ab = round(top25$mean[2:5]), # adult abundance for populations
-survival = top25$mean[10:13], # survival of adults and SA at sites
-survival_J = top25$mean[14:17], # juvenile survival
-env_stoch = top25$mean[6:9], # sd on survival
+survival = top25$mean[6:9], # survival of adults and SA at sites
+survival_J = top25$mean[10:13], # juvenile survival
+#env_stoch = top25$mean[6:9], # sd on survival
 f_reproducing = top25$mean[1], # proportion of females reproducing
 clutch_sizes = clutch_sizes, # clutch size range   
 K = K # carrying capcity applied to adults and SA
@@ -142,7 +142,7 @@ N_sim <- em.pva_simulator(populations = c('CA', 'JE', 'JW', 'MA'),
                           survival_J = paramlist$survival_J, # juvenile survival
                           survival_logit_sd = NULL,
                           site_adjust = NULL,
-                          env_stoch = paramlist$env_stoch, # sd on survival
+                          env_stoch = NULL, # sd on survival
                           transition_mat = transition_mat, # transition prob to SA
                           f_reproducing = paramlist$f_reproducing, # proportion of females reproducing
                           clutch_sizes = clutch_sizes, # clutch size range   
@@ -161,6 +161,7 @@ system.time(N_simulated <- mclapply(1:reps_base, em.extract_N, N_sim,
                                     mc.cores = 10) %>% 
   do.call('rbind', .) %>% 
   mutate_if(is.character, factor))
+
 nlevels(N_simulated$stage)
 nlevels(N_simulated$pop)
 levels(N_simulated$stage) <- c('J', 'SA', 'A1', 'A2', 'A3', 'A4')
@@ -168,7 +169,7 @@ levels(N_simulated$pop) <- c('CA', 'JE', 'JW', 'MA')
 
 
 ggplot(N_simulated, aes(tstep, N+1, group = rep, colour= rep))+
-  geom_line(alpha = 0.02)+
+  geom_line(alpha = 0.01)+
   facet_grid(stage~pop, scale = 'free')+
   theme_bw()+
   #scale_y_log10()+
@@ -176,8 +177,8 @@ ggplot(N_simulated, aes(tstep, N+1, group = rep, colour= rep))+
         panel.grid = element_blank(),
         legend.position = 'none')
 
-ggsave(paste0('./figures/',figprefix, '_base_model_Pops_Stages.png'),dpi = 300,
-       height = 6, width = 7, units = 'in')  
+ggsave(paste0('./figures/',figprefix, 'base_model_Pops_Stages.png'),dpi = 300,
+       height = 7, width = 7, units = 'in')  
 
 
 
@@ -207,7 +208,7 @@ sim_N_sum %>%
  #scale_y_log10()
 tail(extinction_prob)
 
-ggsave(paste0('./figures/',figprefix, '_base_model_Pops.png'),dpi = 300,
+ggsave(paste0('./figures/',figprefix, 'base_model_Pops.png'),dpi = 300,
        height = 4, width = 7, units = 'in')  
 
 extinction_prob %>% 
@@ -223,28 +224,31 @@ extinction_prob %>%
   scale_x_continuous(breaks = c(2013, 2025,seq(2010,2060,10)))+
   scale_y_continuous(breaks = seq(0,1,0.2))
 
-ggsave(paste0('./figures/',figprefix, '_base_model_extinction_noerror.png'),dpi = 300,
+ggsave(paste0('./figures/',figprefix, 'base_model_extinction_noerror.png'),dpi = 300,
        height = 3.8, width = 7, units = 'in') 
 
 
 extinction_prob_sample <- sim_N_sum %>% ungroup() %>% 
-  mutate(subsample = substr(as.character(rep), 1,1)) %>% 
+  mutate(subsample = rep %% 10) %>% 
   group_by(tstep,pop, subsample) %>% 
   summarise(sims = n(),
             sim0 = sum(extinct),
             ext_p = sum(extinct)/n())
-
+table(extinction_prob_sample$subsample)
 extinction_prob_sample %>%
   ungroup() %>% 
   group_by(tstep, pop) %>%
   summarise(p = mean(ext_p),
             sd = sd(ext_p),
-            lcl = p - sd*2,
-            ucl = p + sd*2) %>% 
+            lcl = quantile(ext_p, 0.025),
+            ucl = quantile(ext_p, 0.975),
+            #lcl = p - sd*15,
+            #ucl = p + sd*15
+            ) %>% 
   mutate(year = tstep +2012,
          Sites = pop) %>%
   ggplot(aes(year, p, colour = Sites))+
-  geom_errorbar(aes(ymin = lcl, ymax = ucl), width = 0)+
+  geom_errorbar(aes(ymin = lcl, ymax = ucl), width = 0, alpha = 0.5)+
   geom_vline(xintercept = c(2023, 2025), lty = c(3,2), colour = 'grey')+
   geom_line()+
   geom_point()+
@@ -254,7 +258,7 @@ extinction_prob_sample %>%
   scale_x_continuous(breaks = c(2013, 2025,seq(2010,2060,10)))+
   scale_y_continuous(breaks = seq(0,1,0.2))
 
-ggsave(paste0('./figures/',figprefix, '_base_model_extinction.png'),dpi = 300,
+ggsave(paste0('./figures/',figprefix, 'base_model_extinction.png'),dpi = 300,
        height = 3.8, width = 7, units = 'in') 
 
 
@@ -263,8 +267,10 @@ ggsave(paste0('./figures/',figprefix, '_base_model_extinction.png'),dpi = 300,
 
 ## growth rate --------------
 base_summary <- N_simulated %>% 
+  left_join(extinction_prob[extinction_prob$tstep == 30,-1]) %>% 
   group_by(rep, tstep, pop) %>% 
-  summarise(N = sum(N)) %>% 
+  summarise(N = sum(N),
+            ext_p = mean(ext_p, na.rm = TRUE)) %>% 
   ungroup() %>% 
   group_by(pop, rep) %>% 
   mutate(diff_year = tstep - lag(tstep),
@@ -272,11 +278,7 @@ base_summary <- N_simulated %>%
          rate_percent = (diff_growth /diff_year)/ lag(N) * 100) %>%
   ungroup() %>% 
   group_by(pop) %>% 
-  summarise(base_growth_rate = mean(rate_percent, na.rm = T)) 
-
-  
-base_summary <- extinction_prob %>% 
-  group_by(pop) %>% 
-  summarise(extinction_base = mean(ext_p))
-
-
+  summarise(base_growth_rate = mean(rate_percent, na.rm = T),
+            extinction_base = mean(ext_p)) 
+base_summary
+saveRDS(base_summary, './output/base_summary_r_ext_p.rds')

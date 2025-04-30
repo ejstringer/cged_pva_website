@@ -46,6 +46,9 @@ abundanceFig <- ggplot(n_start, aes(x = year, y = N, group = site))+
         axis.line.y = element_line(colour = 'black', linewidth = 1),
         legend.position = "none");abundanceFig
 
+ggsave('./figures/abundance_grids.png',
+       plot = abundanceFig, dpi = 300,
+       height = 5, width = 7, units = 'in')
 
 abundanceFig2 <- ggplot(n_sites, aes(x = year, y = N, group = site))+
   geom_ribbon(aes(ymin = lcl, ymax = ucl), fill = "grey") +
@@ -70,6 +73,10 @@ abundanceFig2 <- ggplot(n_sites, aes(x = year, y = N, group = site))+
         strip.text.x = element_text(size=12, face = "bold" ),
         strip.background = element_blank(),
         axis.line.y = element_line(colour = 'black', linewidth = 1));abundanceFig2
+
+ggsave('./figures/abundance_sites.png',
+       plot = abundanceFig2, dpi = 300,
+       height = 5, width = 8, units = 'in')
 
 
 write.csv(n_sites, './output/site_abundance.csv', row.names = F) 
