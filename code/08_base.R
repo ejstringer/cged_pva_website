@@ -35,6 +35,7 @@ K <- readRDS('./output/carrying_capcity.rds')
 clutch_sizes <- 4:7
 param_selected <- readRDS('./output/selected_25models_parameters.RDS')
 param_selecteddf <-readRDS('./output/selected_25models_parameters_df.RDS')
+param_envdf <- readRDS('./output/selected_25models_parameters_df_environment.RDS')
 # stage distribution ------------------------------------------------------
 
 eigen_analysis <- function(A) {
@@ -99,7 +100,7 @@ paramlist <- list(populations = c('CA', 'JE', 'JW', 'MA'),
 initial_ab = round(top25$mean[2:5]), # adult abundance for populations
 survival = top25$mean[6:9], # survival of adults and SA at sites
 survival_J = top25$mean[10:13], # juvenile survival
-#env_stoch = top25$mean[6:9], # sd on survival
+env_stoch = param_envdf$mean, # sd on survival
 f_reproducing = top25$mean[1], # proportion of females reproducing
 clutch_sizes = clutch_sizes, # clutch size range   
 K = K # carrying capcity applied to adults and SA
@@ -117,6 +118,7 @@ paramlist %>%
          name = ifelse(name == 'initial_ab', 'N_initial', name),
          name = gsub('_', ' ', name)) %>% 
   pivot_wider(names_from = populations, values_from = value) %>% 
+  mutate(name = ifelse(name == 'env stoch', 'env (logit)', name)) %>% 
   rename(Parameter = name) %>% 
   mutate_if(is.double, as.character) %>% 
   flextable() %>% 
@@ -142,7 +144,7 @@ N_sim <- em.pva_simulator(populations = c('CA', 'JE', 'JW', 'MA'),
                           survival_J = paramlist$survival_J, # juvenile survival
                           survival_logit_sd = NULL,
                           site_adjust = NULL,
-                          env_stoch = NULL, # sd on survival
+                          env_stoch = paramlist$env_stoch, # sd on survival
                           transition_mat = transition_mat, # transition prob to SA
                           f_reproducing = paramlist$f_reproducing, # proportion of females reproducing
                           clutch_sizes = clutch_sizes, # clutch size range   
@@ -169,7 +171,7 @@ levels(N_simulated$pop) <- c('CA', 'JE', 'JW', 'MA')
 
 
 ggplot(N_simulated, aes(tstep, N+1, group = rep, colour= rep))+
-  geom_line(alpha = 0.01)+
+  geom_line(alpha = 0.1)+
   facet_grid(stage~pop, scale = 'free')+
   theme_bw()+
   #scale_y_log10()+
@@ -267,18 +269,23 @@ ggsave(paste0('./figures/',figprefix, 'base_model_extinction.png'),dpi = 300,
 
 ## growth rate --------------
 base_summary <- N_simulated %>% 
-  left_join(extinction_prob[extinction_prob$tstep == 30,-1]) %>% 
+  left_join(extinction_prob) %>% 
   group_by(rep, tstep, pop) %>% 
   summarise(N = sum(N),
             ext_p = mean(ext_p, na.rm = TRUE)) %>% 
+  mutate(ext100 = ext_p == 1) %>% 
   ungroup() %>% 
   group_by(pop, rep) %>% 
   mutate(diff_year = tstep - lag(tstep),
          diff_growth = N - lag(N),
-         rate_percent = (diff_growth /diff_year)/ lag(N) * 100) %>%
+         rate_percent = (diff_growth /diff_year)/ lag(N) * 100,
+         time2ext = min(tstep[ext100 | pop == 'CA']),
+         time2ext = ifelse(time2ext ==1, NA, time2ext)) %>%
   ungroup() %>% 
   group_by(pop) %>% 
   summarise(base_growth_rate = mean(rate_percent, na.rm = T),
-            extinction_base = mean(ext_p)) 
+            extinction_base = mean(ext_p),
+            time_to_extinction = mean(time2ext)) %>% 
+  mutate(year_of_extinction = time_to_extinction + 2012)
 base_summary
 saveRDS(base_summary, './output/base_summary_r_ext_p.rds')
