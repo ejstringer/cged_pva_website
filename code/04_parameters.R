@@ -121,13 +121,22 @@ env_upper <- 0.43 # logit scale
 m <- unlogit(qnorm(c(0.025, 0.975), mean = survival_logit, env_upper))
 var10;m;var10-m
 
+
+
 # sample
 
 sample_data <- randomLHS(reps, nrow(N_start))
 colnames(sample_data) <-paste0('env_stoch_', N_start$site)
 env_stochasticity <- (env_lower + sample_data * (env_upper - env_lower))
 
+# new env stoch after other parameters
+env_lower <- 0
+env_upper <- 2.5 # logit scale
 
+
+sample_data <- randomLHS(reps, length(N_start$site))
+colnames(sample_data) <-paste0('env_stoch_', N_start$site)
+env_stochasticity <- (env_lower + sample_data * (env_upper - env_lower))
 # variable params ---------------------------------------------------------
 
 
@@ -216,10 +225,11 @@ names(param.labs) <- c('N', 'e','s', 'F')
 
 
 
-distribution_fig <- param_est %>% as.data.frame %>% 
+distribution_fig <- param_est %>% cbind(env_stochasticity) %>%
+  as.data.frame %>% 
   rename(survival_J= survival_juv) %>% 
   pivot_longer(cols = everything()) %>% 
-  mutate(type = factor(substr(name, 1,1),levels = c('N','s', 'F')),
+  mutate(type = factor(substr(name, 1,1),levels = c('N', 'e', 's','F')),
          variable = sub('N_init_', '', name),
          variable = sub('survival_', '', variable),
          variable = sub('env_stoch_', '', variable),

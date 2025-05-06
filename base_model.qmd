@@ -27,12 +27,12 @@ fx_basepara
 
 ### 1000 Model runs showing stages and sites
 
-![](./figures/ntg100m_base_model_Pops_Stages.png)
+![](./figures/base_model_Pops_Stages.png)
 
 ### total population size for each sites
 
-![](./figures/ntg100m_base_model_Pops.png)
+![](./figures/base_model_Pops.png)
 
 ## EXTINCTION PROBABILITY
 
-![](./figures/ntg100m_base_model_extinction.png)
+![](./figures/base_model_extinction.png)
