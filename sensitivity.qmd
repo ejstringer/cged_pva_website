@@ -1,0 +1,32 @@
+---
+title: "sensitivity"
+---
+
+## Sensitivity Analysis
+
+Sensitivity analysis by adjusting one component of our population matrix by 1%, 5%, or 10% and seeing the difference in growth rate (lambda/*r*)
+
+
+![](./figures/sensitivity_lambda_diff.png)
+
+
+## Elasticity
+
+### stage matrix
+
+```{r echo=FALSE}
+library(flextable)
+fxmat <- readRDS('./output/sensitivity_stage_mat.rds')
+fxmat
+
+```
+
+### elasticity
+
+```{r echo=FALSE}
+fx<-readRDS('./output/sensitivity_elasticity_table.rds')
+fx
+```
+
+
+![](./figures/sensitivity_pie.png)

@@ -14,6 +14,7 @@ website:
       - model.qmd
       - validation.qmd
       - base_model.qmd
+      - sensitivity.qmd
       - scenarios.qmd
 
 format:
