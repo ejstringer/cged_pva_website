@@ -121,7 +121,7 @@ param_starting_estimates <- param_est
 parameter_estimates <- list()
 
 parameter_estimates[[1]] <- param_starting_estimates
-no.runs <- c(1,1,1,2,1)*10000
+no.runs <- c(1,1,1,2,1)*20000
 topModels <- 100
 nrow(parameter_estimates[[1]])
 head(parameter_estimates[[1]])
@@ -309,7 +309,7 @@ em.parameters_to_df <- function(param_est){
   
   param_est %>% as.data.frame %>%
     relocate(round) %>% 
-    pivot_longer(cols = env_stoch_CA:env_stoch_MA) %>% 
+    pivot_longer(-round) %>% 
     mutate(round = as.character(round)) 
   
 }
@@ -324,7 +324,7 @@ paramer_optermisation %>% filter(round != n_p) %>%
   mutate(round_reordered = (n_p-1) - as.numeric(round)) %>% 
   ggplot(aes(y=round_reordered, x=value, fill = round))+
   geom_boxplot()+
-  facet_wrap(~name, scale = 'free', ncol = 2)+
+  facet_wrap(~name, scale = 'free_y', ncol = 2)+
   scale_fill_manual(values = adegenet::virid(n_p+3)[4:(n_p+3)],
                     name = 'Simulation round')+
   theme_bw()+
@@ -339,7 +339,7 @@ paramer_optermisation %>% filter(round != n_p) %>%
         axis.title.x = element_blank())
 
 ggsave(paste0('./figures/',figprefix, 'environmental_parameter_estimation.png'),
-       dpi = 300, height = 4, width = 4, units = 'in')
+       dpi = 300, height = 6, width = 6, units = 'in')
 
 paramer_optermisation %>% filter(round == n_p) %>% 
   group_by(name) %>% summarise(mean = mean(value)) %>% 

@@ -92,42 +92,13 @@ reproduction <- (repro_lower + sample_data * (repro_upper - repro_lower))
 
 # carrying capacity -------------------------------------------------------
 
-K <- 50*N_start$area_ha %>% round
+K <- 20*N_start$area_ha %>% round
 names(K) <-  paste('K', N_start$site, sep = '_')
 saveRDS(K, './output/carrying_capcity.rds')
 
 # environmental stoch -----------------------------------------------------
 # sd applied to survival yearly  (logit)
 
-# approx 10% variation in survival 
-var10 <- c(unlogit(survival_logit)-0.1,unlogit(survival_logit)+0.1)
-survival_logit -logit(var10)
-logit(var10)
-
-env_lower <- 0
-env_upper <- 0.24 # logit scale
-
-m <- unlogit(qnorm(c(0.025, 0.975), mean = survival_logit, env_upper))
-var10;m;var10-m
-#===================================__
-# approx 20% variation in survival 
-var10 <- c(unlogit(survival_logit)-0.2,unlogit(survival_logit)+0.2)
-survival_logit -logit(var10)
-logit(var10)
-
-env_lower <- 0
-env_upper <- 0.43 # logit scale
-
-m <- unlogit(qnorm(c(0.025, 0.975), mean = survival_logit, env_upper))
-var10;m;var10-m
-
-
-
-# sample
-
-sample_data <- randomLHS(reps, nrow(N_start))
-colnames(sample_data) <-paste0('env_stoch_', N_start$site)
-env_stochasticity <- (env_lower + sample_data * (env_upper - env_lower))
 
 # new env stoch after other parameters
 env_lower <- 0
@@ -204,7 +175,7 @@ parameter_table <- data.frame(site = N_start$site,
 paramter_fxtb <- parameter_table %>% 
   mutate(distribution = c(rep('truncated normal ', 4), 
                           'uniform/logit normal', rep('logit normal',2),
-                          '', 'uniform', '~beta(2,2)', 'uniform',
+                          '', 'uniform', '~beta(2,2)', 'logit uniform',
                           rep('',4))) %>% 
   flextable() %>% 
 autofit() %>%

@@ -250,6 +250,7 @@ extinction_prob_sample %>%
   mutate(year = tstep +2012,
          Sites = pop) %>%
   ggplot(aes(year, p, colour = Sites))+
+  geom_hline(yintercept = c(0,1), linewidth = 0.5, colour = 'grey50')+
   geom_errorbar(aes(ymin = lcl, ymax = ucl), width = 0, alpha = 0.5)+
   geom_vline(xintercept = c(2023, 2025), lty = c(3,2), colour = 'grey')+
   geom_line()+
@@ -259,7 +260,6 @@ extinction_prob_sample %>%
   xlab('Year')+
   scale_x_continuous(breaks = c(2013, 2025,seq(2010,2060,10)))+
   scale_y_continuous(breaks = seq(0,1,0.2))
-
 ggsave(paste0('./figures/',figprefix, 'base_model_extinction.png'),dpi = 300,
        height = 3.8, width = 7, units = 'in') 
 

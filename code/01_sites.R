@@ -8,7 +8,7 @@ exotic <- vect('./data/grasslands/exotic_map.shp')
 
 
 # buffer around ntg (metres)
-buffer_metres <- 100
+buffer_metres <- 1
 
 # site size ---------------------------------------------------------------
 ## fix layers
@@ -43,7 +43,7 @@ sitemap <- ggplot()+
                     name = 'Sites',labels = c('Bonshaw','Cookanalla',
                                               'Jerra East', 'Jerra West',
                                               'Majura'))+
-  ggtitle(paste('Dragon area use: NTG with', buffer_metres, 'buffer'))+
+  ggtitle(paste('Dragon area use: NTG with', buffer_metres, 'metre buffer'))+
   theme_bw()+
   theme(legend.position = 'inside',
         legend.position.inside = c(0.2,0.85),
@@ -90,6 +90,6 @@ area_used <- dfarea %>% filter(site != 'Bonshaw',
                                # property != 'grid',
                                buffer)
 
-# area_used$area_ha[4] <- area_used$area_ha[4]*0.5 # adjusting MA ntg
+area_used$area_ha[4] <- area_used$area_ha[4]*0.45 # adjusting MA ntg
 
 write.csv(area_used, './output/area_used.csv', row.names = F)
