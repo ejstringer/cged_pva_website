@@ -1,12 +1,28 @@
-library(survival)
-# zims data -----------------------------------------------
+
+library(tidyverse)
+library(lubridate)
+library(pscl)
+# load --------------------------------------------------------------------
+
+# zims data 
 tid <- read.csv('./data/tidbinbilla_colony.csv')
 mel <- read.csv('./data/melbourne_colony.csv')
 
-tid$Age
-mel$Status %>% table
+# breeding 
+mel2024 <- read.csv('./data/melbourn_zoo_tympo_breeding_2024.csv') %>% 
+  filter(complete.cases(Number.of.clutches))
 
-tid %>% 
+# colony data
+ged <- read.csv('./data/GED_Pedigree_for_Emily_tidied.csv') %>% 
+  rename_all(tolower)
+
+# K ---------------------
+
+Ktid <- table(tid$Status)[1]
+
+# survival analysis -------------------------------------------------------
+#https://rviews.rstudio.com/2017/09/25/survival-analysis-with-r/
+tid_colony<- tid %>% 
   separate(col = Age, into = c('year', 'month', 'day'), sep = ',', remove = F) %>% 
   mutate(day = substr(trimws(day), 1,3),
          day = as.numeric(sub('D', '', day)),
@@ -23,270 +39,169 @@ tid %>%
          status != 'released') %>% 
   select(days.alive, status) %>% 
   filter(days.alive < (365*6)) %>% 
-  mutate(survival = ifelse(status == 'dead', 0, 1)) -> tid_colony
+  mutate(event = ifelse(status == 'dead', 1, 0),
+         time = days.alive/365)
 
-
-m<-glm(survival ~ days.alive, data = tid_colony, family = 'binomial')
-
-x_days <- 0:2655
-
-pred.m <- predict(m, newdata=data.frame(days.alive = x_days), type = 'response')
-
-pred.surv <- data.frame(days.alive = x_days, 
-           survival = pred.m) %>% 
-  mutate(year = round(days.alive/365, 3),
-         years.alive = days.alive/365,
-         months.alive = years.alive*12)
-
-table(tid_colony$status[(tid_colony$days.alive/365)<1])
-
-table(round(tid_colony$time), tid_colony$status) %>% 
-  as.matrix %>% 
-  as.data.frame() %>%
-  pivot_wider(names_from = Var2, values_from = Freq) %>% 
-  mutate(Var1 = as.numeric(as.character(Var1)),
-         Var1 = ifelse(Var1 > 9, 9, Var1)) %>% 
-  group_by(Var1) %>%
-  summarise(Alive = sum(Alive),
-            Dead = sum(dead)) %>% 
-  mutate(All = Alive + Dead,
-         survival = Alive/All,
-         Age = paste0(Var1, '-', Var1 +1, 'yrs'))
-
-pred.surv %>% 
-  filter(year %in% c(1:7)) %>% 
-  mutate(stage = c('J', paste0('A', 1:6)),
-         survival_calc = 0.89^c(1,2,3,4,5,6,7),
-         surv_diff = abs(survival - survival_calc))
-
-tid_colony %>% 
-  mutate(years.alive = days.alive/365,
-         months.alive = years.alive*12) %>% 
-ggplot(aes(y = survival, x = months.alive))+
-  geom_point()+
-  theme_classic()+
-  scale_x_continuous(breaks = seq(0,100, 12))+
-  geom_line(data = pred.surv, colour = 'grey', lwd = 1)
-
-
-
-# survival analysis -------------------------------------------------------
-#https://rviews.rstudio.com/2017/09/25/survival-analysis-with-r/
-tid_colony$time <- tid_colony$days.alive/365
-tid_colony$event <- ifelse(tid_colony$survival == 0, 1,0)
-tid_colony$age <- ifelse(tid_colony$days.alive > (365*3), 'old', 'young')
-
+table(round(tid_colony$time))
 km.curve <- with(tid_colony, Surv(time, event))
 head(km.curve,80)
 
 
 km_fit <- survfit(Surv(time, event) ~ 1, data=tid_colony)
-summary(km_fit, times = c(1:7))
+survival_m <- summary(km_fit, times = c(1:7))
 
 
 plot(km_fit, xlab="Years", main = 'Kaplan Meyer Plot')
 
-km_AG_fit <- survfit(Surv(time, event) ~ age, data=tid_colony)
-summary(km_AG_fit, times = c(1:5), age = 'old')
-plot(km_AG_fit, xlab="Years", main = 'Kaplan Meyer Plot', col = 1:2)
 
-# data from ryan ----------------------------------------------------------
-
-library(tidyverse)
-library(lubridate)
-ged <- read.csv('./data/GED_Pedigree_for_Emily.csv') 
-ged[grep('or 22', ged$sire.ID),]
-
-ged$Notes[grep('or 22', ged$sire.ID)] <- paste(ged$Notes[grep('or 22', ged$sire.ID)], '; or sire.id = ged.id 22')
-ged$sire.ID[grep('or 22', ged$sire.ID)] <- '105'
-
-## fix dates ---------------------------------------------------------------
-em.date.fix <- function(xdate){
-  
-  if(grepl('-', xdate)){
-    xmonth <- which(sapply(month.abb, function(x) grepl(x, xdate)))
-    xdatetidy <- gsub('-', '/', sub(month.abb[xmonth], xmonth, xdate))
-    xdateformat<- as.Date(xdatetidy, tryFormats = c('%d/%m/%y'))
-  }else{
-    xdateformat <- as.Date(xdate, tryFormats = '%d/%m/%Y')
-  }
-  return(xdateformat)
-}
+# reproduction ----------------------------------------------------------------
 
 
+# perc reproducing --------------------------------------------------------
 
+tb_mel <- table(mel2024$Number.of.clutches)
 
-ged$lay.date <- do.call('c', lapply(ged$lay.date, em.date.fix))
+perc_repro <- 1 - (tb_mel[1]/sum(tb_mel))
 
-ged$hatch.date <- do.call('c', lapply(ged$hatch.date, em.date.fix))
+dups <- mel2024$Female[duplicated(mel2024$Female)]
+mel2024[mel2024$Female %in% dups,]
 
-## fix missing clutch ids --------------------------------------------------
-
-ged %>% filter(is.na(clutch.ID) & complete.cases(sire.ID))
-ged_miss <- ged[is.na(ged$clutch.ID) & complete.cases(ged$sire.ID),]
-
-new_clutch_ids <- paste(ged_miss$colony, ged_miss$dam.ID, ged_miss$year, 
-                        'x',
-                        sep = '-')
-new_clutch_ids[12:17] <- paste0(new_clutch_ids[12:17], 'x')
-
-ged$clutch.ID[is.na(ged$clutch.ID) & complete.cases(ged$sire.ID)] <- new_clutch_ids
-
-ged[169:188,]
-ged$clutch.ID[183:188]
-# 212 likely from same clutch as 204 - parents 177 and 188
-# 215 likely from same clutch as 213 214 and 216 - parents 130 and 195
-## explore -----------------------------------------------------------------
-
-names(ged)
-head(ged)
-index <- paste(ged$clutch.ID, ged$egg.no) %>% duplicated
-ged[index,]
-
-ged %>% filter(sex == 'F', 
-               complete.cases(clutch.ID)) %>%
-  group_by(dam.ID) %>% 
-  summarise(clutches = n()) %>% arrange(clutches) 
-
-table(ged$Female.Clutch.Count, ged$year)
-ged$egg.no %>% boxplot
-
-filter(ged, dam.ID == 'B90783')
-
-
-# data tbls ---------------------------------------------------------------
-
-
-## dragon tbl --------------------------------------------------------------
-
-dragons <- ged %>% 
-  select(GED.ID, colony, sex, year, clutch.ID, hatch.date, Origin, Notes) %>% 
-  rename(dragon.notes = Notes) %>% 
-  filter(complete.cases(GED.ID)) %>% 
-  rename_all(tolower)
-
-
-## clutch tbl --------------------------------------------------------------
-clutches <- ged %>% 
-  filter(complete.cases(clutch.ID)) %>% 
-  group_by(clutch.ID, dam.ID, sire.ID, lay.date, clutch.size) %>% 
+## clutch distribution -----------------------------------------------------
+clutches_mums <- ged %>% 
+  filter(complete.cases(clutch.id)) %>% 
+  group_by(clutch.id, dam.id, sire.id, lay.date, clutch.size) %>% 
   summarise(number.hatched = sum(hatch.success))%>% 
-  rename_all(tolower)
-
-clutches[grep(195, clutches$sire.id),]
-## egg tbl -----------------------------------------------------------------
-eggs <- ged %>% 
-  select(clutch.ID, egg.no, hatch.success, GED.ID, Notes) %>% 
-  rename(egg.notes = Notes) %>% 
-  filter(complete.cases(egg.no))%>% 
-  rename_all(tolower)
-
-
-## AA tbl ------------------------------------------------------------------
-AAnumber <- ged %>% select(GED.ID, AA_Number) %>% 
-  filter(complete.cases(AA_Number))%>% 
-  rename_all(tolower)
-
-
-
-
-# save csvs ------------
-#dir.create('./data/colony')
-
-write.csv(dragons, './data/colony/dragons.csv', row.names = FALSE)
-write.csv(clutches, './data/colony/clutches.csv', row.names = FALSE)
-write.csv(eggs, './data/colony/eggs.csv', row.names = FALSE)
-write.csv(AAnumber, './data/colony/AAsamples.csv', row.names = FALSE)
-
-
-# assess births -----------------------------------------------------------
-
-births <- dragons %>% filter(complete.cases(hatch.date)) %>% 
-  left_join(clutches)
-head(births)
-births$hatch.date
-
-momsbirth<-clutches %>% 
-  left_join(dragons[,c('ged.id', 'hatch.date')], 
+  rename_all(tolower)%>% 
+  left_join(ged[,c('ged.id', 'hatch.date')], 
             by = c('dam.id' = 'ged.id')) %>% 
-  #filter(complete.cases(hatch.date), complete.cases(lay.date)) %>% 
   filter(!grepl('UC', clutch.id)) %>% 
-  mutate(age = lay.date - hatch.date,
-         years = as.numeric(age/365),
-         year = year(lay.date),
-         months = years*12,
-         wholeyear = round(years),
-         not_hatched = clutch.size-number.hatched,
-         per_hatched = number.hatched/clutch.size) 
-momsbirth$years %>% max(., na.rm = T)
-plot(momsbirth$years, momsbirth$number.hatched)
-momsbirth$hatch.date %>% table
-table(round(momsbirth$years,2))
-boxplot(momsbirth$per_hatched~momsbirth$wholeyear)
-hatched_age_model <- aov(number.hatched ~ factor(wholeyear), data = momsbirth)
-summary(hatched_age_model)
-TukeyHSD(hatched_age_model)
+  ungroup() %>% 
+  mutate(year = year(lay.date),
+         age_days = ymd(lay.date) - ymd(hatch.date),
+         age_years = as.numeric(age_days/365),
+         wholeyear = round(age_years)) %>% 
+  arrange(hatch.date) %>% 
+  filter(complete.cases(hatch.date))
 
-momsbirth %>%
+clutches_mums %>% head
+
+### age diff ----------------------------------------------------------------
+clutches_mums %>% 
+  group_by(wholeyear) %>% 
+  summarise(size = mean(clutch.size),
+            sd = sd(clutch.size)) %>% 
+  mutate(lcl = size - (sd*2/n()),
+         ucl = size + (sd*2)/n())%>% 
+  ggplot(aes(wholeyear, size))+
+  # geom_jitter(data = clutches_mums, aes(y = clutch.size),
+  #             colour = 'grey85', width = 0.1)+
+  geom_errorbar(aes(ymin = lcl, ymax = ucl), width = 0.1)+
+  geom_point(size = 3)+
+  theme_classic()
+
+barplot(table(clutches_mums$clutch.size))
+summary(m1 <- glm(number.hatched ~ factor(wholeyear),
+                       data = clutches_mums), family = 'poisson')
+anova(m1) # marginal but to keep it simple assume no difference
+mnull <- update(m1, . ~ 1)
+
+AIC(m1, mnull) # do not reject null model 
+
+# assume no age difference
+
+### clutch size --------------------
+
+table(clutches_mums$clutch.size, clutches_mums$number.hatched)
+# clutch size 2 and 9 never had hatched individuals - will remove them as viable clutch size
+# clutch size of 8 only produced 7 so lets maintain clutch size max of 7 (for modelling)
+
+c_size <- clutches_mums[clutches_mums$clutch.size %in% (3:7),]
+
+barplot(table(c_size$clutch.size))
+
+perc_size <- table(c_size$clutch.size)/sum(table(c_size$clutch.size))
+
+clutch_beta <- dbeta(seq(0.1,0.9, length.out = length(perc_size)),2,3)
+
+perc_beta <- clutch_beta/sum(clutch_beta)
+sum(abs(perc_size-perc_beta))
+names(perc_beta) <- names(perc_size)
+
+round(perc_size,2)
+round(perc_beta,2)
+    
+
+
+# number of clutches ------------------------------------------------------
+
+
+tb_clutches <- table(clutches_mums$dam.id, 
+                     clutches_mums$year)
+table(tb_clutches)
+# only one mother had 4 so will consider this an outlier and not model
+n_clutches <- table(tb_clutches)[-c(1,5)]
+perc_n <- n_clutches/sum(n_clutches)
+round(perc_n,2) 
+
+barplot(perc_n)
+
+
+tb_clutches
+
+
+# Juvenile survival -------------------------------------------------------
+
+## age difference ----------------------------------------------------------
+clutches_mums %>% 
   group_by(wholeyear) %>% 
   summarise(hatched = mean(number.hatched),
             sd = sd(number.hatched)) %>% 
   mutate(lcl = hatched - (sd*2/n()),
          ucl = hatched + (sd*2)/n())%>% 
-ggplot(aes(wholeyear, hatched))+
-  #geom_bar(stat = 'identity')
+  ggplot(aes(wholeyear, hatched))+
+  geom_jitter(data = clutches_mums, aes(y = number.hatched),
+              colour = 'grey85', width = 0.1)+
   geom_errorbar(aes(ymin = lcl, ymax = ucl), width = 0.1)+
-  geom_point(size = 2)+
-  ylim(0,6)
+  geom_point(size = 3)+
+  ylim(0,6)+
+  theme_classic()
 
-barplot(table(momsbirth$number.hatched))
-glm(number.hatched ~ (wholeyear)+I(wholeyear^2), 
-    data = momsbirth, family ='poisson') %>% summary
-
-#install.packages('pscl')
-library(pscl)
-
-summary(m1 <- zeroinfl(number.hatched ~ factor(wholeyear), data = momsbirth))
-
-summary(m1 <- zeroinfl(number.hatched ~ wholeyear + I(wholeyear^2), data = momsbirth))
+barplot(table(clutches_mums$number.hatched))
+summary(m1 <- zeroinfl(number.hatched ~ factor(wholeyear),
+                       data = clutches_mums))
 
 mnull <- update(m1, . ~ 1)
 
 pchisq(2 * (logLik(m1) - logLik(mnull)), df = 6, lower.tail = FALSE)
-AIC(m1, mnull)
+AIC(m1, mnull) # do not reject null model 
 
-mean(momsbirth$per_hatched)
-
-sum(momsbirth$number.hatched)/sum(momsbirth$clutch.size)
-mean(momsbirth$clutch.size*0.68)
+# No age difference
 
 
-(table(momsbirth$number.hatched[momsbirth$clutch.size %in% (3:8)],
-       momsbirth$wholeyear[momsbirth$clutch.size %in% (3:8)]))
-table(momsbirth$number.hatched)
-barplot(table(momsbirth$number.hatched)[-1])
-hist(momsbirth$not_hatched)
-mean(momsbirth$not_hatched)
-table(momsbirth$not_hatched>0)
-barplot(table(momsbirth$clutch.size)[2:7])
-table(momsbirth$clutch.size, momsbirth$number.hatched)
-
-clutch_size_prop <- table(momsbirth$clutch.size)[2:7]
-barplot(clutch_size_prop/sum(clutch_size_prop), ylim = c(0, 0.4))
-
-momsbirth$clutch.size %>% table
-shapiro.test(momsbirth$years)
+## survival ----------------------------------------------------------------
 
 
-tb_clutches <- table(momsbirth$dam.id[grepl('TNR', momsbirth$clutch.id)], 
-      momsbirth$year[grepl('TNR', momsbirth$clutch.id)])
 
-tb_clutches <- table(momsbirth$dam.id, 
-                     momsbirth$year)
-round(table(tb_clutches)[-c(1,5)]/sum(table(tb_clutches)[-c(1,5)]),4) 
- barplot(table(tb_clutches)[-1]/sum(table(tb_clutches)[-1]))
-apply(tb_clutches, 2, function(x) table(x[x>0]))
-px <- seq(0,100, 1)
-plot(px/10,dpois(px, lambda = 15), type = 'l')
+perc_hatch <- sum(momsbirth$number.hatched)/sum(momsbirth$clutch.size)
 
-barplot(table(rpois(1000, lambda = 2))[-1])
+surv0_1 <- survival_m$surv[1]
+
+juv_survival <- perc_hatch*surv0_1
+
+juv_survival
+
+adult_survival  <- survival_m$surv[2]
+adult_survival
+
+
+# Parameters --------------------------------------------------------------
+Ktid # make 100
+juv_survival
+adult_survival
+
+perc_n # probability of number of clutches
+
+perc_beta # prob of clutch size
+
+perc_repro # percent of females reproducing
+

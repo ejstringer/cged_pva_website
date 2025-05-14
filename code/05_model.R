@@ -38,7 +38,7 @@ em.juveniles <- function(mothers, clutch_sizes){
   
   n <- length(clutch_sizes)
   prob_seq <- seq(0.1,0.9, length.out = n)
-  beta2 <- dbeta(prob_seq,2,2) 
+  beta2 <- dbeta(prob_seq,2,3) 
   clutch_prob <-beta2/sum(beta2)
   
   if(mothers >0){# necessary because mothers = 0 returns nothing
@@ -68,13 +68,19 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
                              clutch_sizes, # clutch size range   
                              K = K, # carrying capcity applied to adults and SA
                              time_steps = 8, # time
-                             replicates = 1){
+                             replicates = 1,
+                             supp = FALSE,
+                             n.supp = c(10,10,10,10),
+                             stage.supp = 3,
+                             when.supp = seq(2,5)){
   
   ## initialise model
   # initial population sizes across stages and sites
   initial_abundance <- em.initial.N(initial_ab, stage_distribution, populations)
   n_stages <- nrow(initial_abundance)
   n_populations <- ncol(initial_abundance)
+  
+  if (length(f_reproducing) == 1) f_reproducing <- rep(f_reproducing, n_populations)
   
   # abundance array
   N <- array(dim = c(n_stages, n_populations, time_steps, replicates))
@@ -99,6 +105,20 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
   
   for (i in 1:replicates) {
     for (yr in 2:time_steps) {
+      
+      Nprevious <- N[, , yr-1, i]
+      ## supplementation -----
+      if (supp) {
+        if(yr %in% when.supp){
+          for (sites in 1:n_populations) {
+            
+            prev.N <- Nprevious[,sites]
+            # demographic stochasitcity (binomial/bernoulli distribution)
+            new.N <- prev.N[stage.supp] + n.supp[sites]
+            Nprevious[stage.supp,sites] <- new.N
+          }
+        }
+      }
       
       ## survival ---------
       ### environmental stoch (adults and SA) ---------------------------
@@ -126,10 +146,10 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
       survival_year <- cbind(J= survival_J_env,
                         sapply(1:(n_stages-2), function(x) survival_env),
                         oldest = 0)
-      
+      # surviving
       for (sites in 1:n_populations) {
         surv <- survival_year[sites,]
-        prev.N <- N[,sites , yr-1, i]
+        prev.N <- Nprevious[,sites]
         # demographic stochasitcity (binomial/bernoulli distribution)
         new.N <- sapply(1:length(prev.N), function(x) sum(rbinom(prev.N[x],1,surv[x])))
         N[, sites, yr, i] <- new.N
@@ -152,7 +172,8 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
       
       ## reproduction ---------
       females <- round(colSums(N[3:n_stages,,yr,i])/2)
-      mothers <- sapply(females, function(x) sum(rbinom(x, 1, f_reproducing)))
+      mothers <- sapply(1:n_populations, 
+                        function(x) sum(rbinom(females[x], 1, f_reproducing[x])))
       clutches <- lapply(mothers, em.juveniles, clutch_sizes)
       
       juvs <- sapply(clutches, sum)
