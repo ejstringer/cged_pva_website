@@ -59,12 +59,21 @@ plot(km_fit, xlab="Years", main = 'Kaplan Meyer Plot')
 
 # perc reproducing --------------------------------------------------------
 
-tb_mel <- table(mel2024$Number.of.clutches)
+femaleHatches <- mel2024 %>% 
+  group_by(Female) %>% 
+  summarise(n_clutches = sum(total.offspring.successfully.hatched))
+
+tb_mel <- table(femaleHatches$n_clutches)
+
+females2024 <- mel2024 %>% 
+  group_by(Female) %>% 
+  summarise(n_clutches = sum(Number.of.clutches))
+
+tb_mel <- table(females2024$n_clutches)
+
 
 perc_repro <- 1 - (tb_mel[1]/sum(tb_mel))
 
-dups <- mel2024$Female[duplicated(mel2024$Female)]
-mel2024[mel2024$Female %in% dups,]
 
 ## clutch distribution -----------------------------------------------------
 clutches_mums <- ged %>% 
@@ -166,6 +175,8 @@ clutches_mums %>%
   ylim(0,6)+
   theme_classic()
 
+table(clutches_mums$number.hatched==0)
+15/(15+68)
 barplot(table(clutches_mums$number.hatched))
 summary(m1 <- zeroinfl(number.hatched ~ factor(wholeyear),
                        data = clutches_mums))
@@ -199,9 +210,143 @@ Ktid # make 100
 juv_survival
 adult_survival
 
+perc_repro # percent of females reproducing
+
 perc_n # probability of number of clutches
 
 perc_beta # prob of clutch size
 
-perc_repro # percent of females reproducing
+
+#### _________________ ####
+# model -------------------------------------------------------------------
+for(sub in 1:2){
+reps <- 1000
+seq_sup <- c(5,10,15)
+
+supplement <- sub == 1
+
+N_sim <- em.pva_simulator(populations = c('CA', 'JE', 'JW', 'MA','TR'),
+                          stages = c('J', 'SA','A1','A2','A3', 'A4'),
+                          stage_distribution = stage_distribution, 
+                          initial_ab = c(52,34,233,146, 93), 
+                          survival = c(0.45, 0.39, 0.27, 0.39, 0.88), 
+                          survival_J = c(0.58, 0.52, 0.39, 0.52, 0.67),
+                          survival_logit_sd = NULL,
+                          site_adjust = NULL,
+                          env_stoch = c(0.3, 1.9, 1.7, 2.1, 0.001), 
+                          transition_mat = transition_mat, 
+                          f_reproducing = c(rep(0.35,4), 0.6), 
+                          clutch_sizes = 3:7,   
+                          K = c(100,440, 740, 1000, 100),
+                         # density_stage = c(2:5),
+                          time_steps = 20, # time
+                          replicates = reps,
+                          supp = supplement,
+                          n.supp = c(rep(25, 4),0), 
+                          when.supp = seq_sup)
+
+
+N_sim %>% length
+
+
+# join --------------------------------------------------------------------
+
+system.time(N_simulated <- mclapply(1:reps, em.extract_N, N_sim,
+                                    mc.cores = 5) %>% 
+              do.call('rbind', .) %>% 
+              mutate_if(is.character, factor))
+
+nlevels(N_simulated$stage)
+nlevels(N_simulated$pop)
+levels(N_simulated$stage) <- c('J', 'SA', 'A1', 'A2', 'A3', 'A4')
+levels(N_simulated$pop) <- c('CA', 'JE', 'JW', 'MA', 'TR')
+
+
+sim_N_sum <- N_simulated %>% 
+  filter(stage != 'J') %>% 
+  group_by(rep, tstep, pop) %>% 
+  summarise(N = sum(N)) %>% 
+  mutate(extinct = N < 2)
+sum(sim_N_sum$extinct)
+
+if(sub == 1) sim_N_sum_Sup <- sim_N_sum
+if(sub == 2) sim_N_sum_base <- sim_N_sum
+
+
+}
+sim_N_sum_base$supplementation <- 'no'
+sim_N_sum_Sup$supplementation <- 'yes'
+# summarised plot ---------------------------------------------------------
+
+sim_N_sum_base %>%
+  bind_rows(sim_N_sum_Sup) %>% 
+  group_by(tstep, pop, supplementation) %>% 
+  summarise(N = mean(N)) %>% 
+  mutate(year = tstep +2012) %>% 
+  ggplot(aes(year, N, colour = supplementation))+
+  geom_hline(yintercept = 0, colour = 'red', lty = 2, linewidth = 0.3)+
+  geom_line(alpha = 1)+
+  facet_wrap(~pop, scale = 'free')+
+  theme_bw()+
+  geom_vline(xintercept = seq_sup+2012, colour = 'grey60',
+             lty = 2)+
+  theme(panel.grid = element_blank(),
+        legend.position = 'bottom',
+        strip.background = element_blank(),
+        strip.text = element_text(face = 'bold'))
+
+
+extinction_prob <- sim_N_sum_base %>%
+  bind_rows(sim_N_sum_Sup) %>% ungroup() %>% 
+  group_by(tstep,pop,supplementation) %>% 
+  summarise(sims = n(),
+            sim0 = sum(extinct),
+            ext_p = sum(extinct)/n())
+tail(extinction_prob)
+
+extinction_prob %>% 
+  mutate(year = tstep +2012,
+         Sites = pop) %>%
+  ggplot(aes(year, ext_p, colour = Sites))+
+  geom_vline(xintercept = seq_sup+2012, lty = 3, colour = 'grey')+
+  geom_line(aes(linetype = supplementation))+
+  geom_point(aes(shape = supplementation))+
+  theme_classic()+
+  ylab('Extinction probability')+
+  xlab('Year')+
+  scale_x_continuous(breaks = c(2013, 2025,seq(2010,2060,10)))+
+  scale_y_continuous(breaks = seq(0,1,0.2))
+ 
+# delcine threshold ------------------------------------------------------
+#https://kevintshoemaker.github.io/NRES-470/LECTURE12.html#Step_1:_conceptualize_the_life_history
+final_N <- sim_N_sum_base %>%
+  bind_rows(sim_N_sum_Sup) %>% 
+  ungroup() %>% 
+  filter(tstep == max(tstep),
+         pop == "CA")
+
+
+# plot probabilities of different severities of decline
+Init_N <- 52
+declines <- seq(0,100,by=2)
+declineprob <- numeric(length(declines))
+
+for(s in 1:length(declines)){
+  declineprob[s] <- length(which(final_N$N <(Init_N-(declines[s]/100)*Init_N)))/length(final_N$N)
+}
+
+plot(declines[-101],declineprob[-101],type="l",lwd=2,xlab="Decline threshold (percent)",ylab="Probability of falling below threshold")
+
+abline(v=25,col="red",lwd=2)
+Init_N*0.25
+
+# check juv ---------------------------------------------------------------
+
+
+N_simulated %>% 
+  mutate(age = ifelse(stage == 'J', 'juv', 'adult')) %>% 
+  group_by(rep, tstep, pop, age) %>% 
+  summarise(N = sum(N)) %>% 
+  pivot_wider(names_from = age, values_from = N) %>% 
+  filter(adult == 1) %>% summary
 

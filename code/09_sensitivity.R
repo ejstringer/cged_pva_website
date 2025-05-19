@@ -195,6 +195,11 @@ sumgrow <- sum(emat[2:3,1])
 sumgrow2 <- sum(emat[4,2])
 sumstasis <- sum(emat[3:6,3:6])
 
+
+par(mar=c(4,4,4,4))
+barplot(c(fecundity = sumfec, Juv = sumgrow, SA = sumgrow2, Adult = sumstasis), 
+        col = c("gray50", "#6AA341",'#6AA990', "gray90"), ylim = c(0,0.4),
+        xlab = 'Fecundity / growth + Survival', ylab = 'Elasticity')
 par(mar=c(0, 2, 0, 4))
 pie(c(sumfec,sumgrow,sumgrow2, sumstasis), col = c("gray50", "#6AA341",'#6AA990', "gray90"),
     labels=c("fecundity","growth+survival J","growth+survival SA", "growth+survival A"))
