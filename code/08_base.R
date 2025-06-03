@@ -1,94 +1,78 @@
 
-em.extract_N <- function(repx, sim){
-  tstep <- dim(sim)[3]
-  nstage <- dim(sim)[1]
-  npop <- dim(sim)[2]
-  
-  df_N_overtime <- NULL
-  for (ts in 1:tstep) {
-    mat <- sim[,,ts,repx]
-    rownames(mat) <- paste0('stage', 1:nstage)
-    colnames(mat) <- paste0('pop', 1:npop)
-    
-    dfmat <- as.data.frame(mat) %>% 
-      mutate(stage = rownames(mat)) %>% 
-      pivot_longer(cols = colnames(mat),names_to = 'pop', values_to = 'N')
-    dfmat$tstep <- ts
-    dfmat$rep <- repx
-    df_N_overtime <- rbind(df_N_overtime, dfmat)
-    
-  }
-  return(df_N_overtime)
-}
-
-
-
 
 # load --------------------------------------------------------------------
 figprefix <- ''
 source('./code/00_libraries.R')
 source('./code/05_model.R')
 param_starting_estimates <- readRDS('./output/starting_values.rds')
-stage_distribution <- readRDS('./output/stage_distribution.rds')
+stages <- names(readRDS('./output/stage_distribution.rds'))
 transition_mat <- readRDS('./output/transition_matrix.rds')
-K <- readRDS('./output/carrying_capcity.rds')
-clutch_sizes <- 4:7
+# K <- readRDS('./output/carrying_capcity.rds')
+# clutch_sizes <- 4:7
+base_params <- readRDS('./output/base_parameters.rds')
+max_age <- base_params$age
+K <- base_params$K
+clutch_sizes <- base_params$clutch
+transition <- base_params$transition
+
 param_selected <- readRDS('./output/selected_25models_parameters.RDS')
 param_selecteddf <-readRDS('./output/selected_25models_parameters_df.RDS')
 param_envdf <- readRDS('./output/selected_25models_parameters_df_environment.RDS')
 # stage distribution ------------------------------------------------------
 
-eigen_analysis <- function(A) {
-  ev <- eigen(A)
-  lmax <- which(Re(ev$values) == max(Re(ev$values)))
-  lambda <- Re(ev$values[lmax])
-  W <- ev$vectors
-  w <- abs(Re(W[, lmax]))
-  stable_age <- w/sum(w)
-  return(list(lambda, stable_age))
-}
-
-# fecundity <- (mean(param_selected[,'F_reproduction'])*0.5)*5.5 
-# ASAsur <- mean(param_selected[,grep('survival_A', colnames(param_selected))])
-# Jt <- mean(param_selected[,'survival_juv'])
-
 fecundity <- (mean(param_selecteddf$mean[param_selecteddf$name == 'F_reproduction'])*0.5)*5.5 
 ASAsur <- mean(param_selecteddf$mean[grep('survival_A', param_selecteddf$name)])
 Jt <- mean(param_selecteddf$mean[grep('survival_J', param_selecteddf$name)])
 
-stage.mat <- matrix(c(0, 0, rep(fecundity,3),0,
-                      Jt*0.194, 0, 0, 0,0,0,
-                      Jt*0.806, 0,0,0,0,0,
-                      0, ASAsur,ASAsur, 0,0,0,
-                      0, 0, 0,ASAsur,0,0,
-                      0, 0, 0,0,ASAsur,0), nrow = 6, ncol = 6, byrow = TRUE,
-                    dimnames = list(c('J', 'SA','A1','A2','A3', 'A4'),
-                                    c('J', 'SA','A1','A2','A3', 'A4')))
+stage.mat <- matrix(0, 
+                    nrow = length(stages),
+                    ncol = length(stages),
+                    byrow = TRUE,
+                    dimnames = list(stages,
+                                    stages))
+
+# fecundity
+fecund_ages <- which(stages %in% paste0('A', 1:(max_age-1)))
+stage.mat[1,fecund_ages] <- fecundity
+# juvenile survival + growth
+stage.mat[2:3,which(stages == 'J')] <- Jt*c(transition, 1-transition)
+
+# adult survival + growth
+for (i in 2:(max_age+2)) {
+  stg <- stages[i]
+  if (stg == 'SA') stage.mat[i+2,i] <- ASAsur
+  if (stg != 'SA' & i < (max_age+2)) stage.mat[i+1, i] <- ASAsur
+}
+
+stage.mat
+eigen_analysis(stage.mat)
 
 stage_distribution <- eigen_analysis(stage.mat)[[2]]
-names(stage_distribution)<- c('J', 'SA','A1','A2','A3', 'A4')
+names(stage_distribution)<- stages
+saveRDS(stage_distribution, './output/stage_distribution_base.rds')
+
 
 as.data.frame(stage.mat) %>% 
   mutate_if(is.numeric, round, 3) %>% 
   mutate(stages = rownames(.)) %>% 
   rbind(c(round(stage_distribution,2),'stable:')) %>% 
-  rbind(c(round(eigen_analysis(stage.mat)[[1]],3), rep(NA,5), 'lambda =')) %>% 
+  rbind(c(round(eigen_analysis(stage.mat)[[1]],3), rep(NA,max_age+1), 'lambda =')) %>% 
   relocate(stages) %>% 
   flextable() %>% 
   autofit() %>% 
  # border_remove() %>%
-  vline(j = 1, i = 1:6, part = 'body', border = fp_border_default(width = 1.5)) %>% 
+  vline(j = 1, i = 1:nrow(stage.mat), part = 'body', border = fp_border_default(width = 1.5)) %>% 
   vline(j = 1, part = 'header', border = fp_border_default(width = 1.5)) %>% 
-  hline(i = 6, border = fp_border_default(width = 1.5)) %>% 
-  hline(i = 7, j=1:2, border = fp_border_default(width = 1.5)) %>% 
-  vline(i = 8, j = c(2),border = fp_border_default(width = 1.5), part = 'body') %>% 
+  hline(i = nrow(stage.mat), border = fp_border_default(width = 1.5)) %>% 
+  hline(i = nrow(stage.mat)+1, j=1:2, border = fp_border_default(width = 1.5)) %>% 
+  vline(i = nrow(stage.mat)+2, j = c(2),border = fp_border_default(width = 1.5), part = 'body') %>% 
   align(j = 1,  align = 'right') %>% 
   align(part = 'header', j  = 1,align = 'right') %>% 
-  hline(i = 7, border = fp_border_default(width = 1.5)) %>% 
-  hline_bottom(j = 3:7,border = fp_border_default(width = 0)) %>%  
-  vline_left(i = 8, part = 'body', border = fp_border_default(width = 1.5)) %>% 
+  hline(i = nrow(stage.mat)+1, border = fp_border_default(width = 1.5)) %>% 
+  hline_bottom(j = 3:(nrow(stage.mat)+1),border = fp_border_default(width = 0)) %>%  
+  vline_left(i = nrow(stage.mat)+2, part = 'body', border = fp_border_default(width = 1.5)) %>% 
   bold(part = 'header') %>% 
-  bold(j = 2, i = 8, part = 'body') %>% 
+  bold(j = 2, i = nrow(stage.mat)+2, part = 'body') %>% 
   bold(j= 1) %>% 
   font(part = 'all', fontname='calibri') %>% 
   saveRDS('./output/new_stage_distribution.rds')
@@ -108,9 +92,9 @@ K = K # carrying capcity applied to adults and SA
 
 
 
-paramlist %>% 
+paramlist[which(names(paramlist) != 'clutch_sizes')] %>% 
   do.call('cbind', .) %>% 
-  as.data.frame %>% dplyr::select(-clutch_sizes) %>% 
+  as.data.frame %>% #dplyr::select(-clutch_sizes) %>% 
   pivot_longer(initial_ab:K) %>% 
   mutate(value = as.numeric(value),
          value = round(value, 2),
@@ -137,7 +121,7 @@ reps_base <- 1000
 #top25 <- apply(param_selected, 2, summary)[4,]
 
 N_sim <- em.pva_simulator(populations = c('CA', 'JE', 'JW', 'MA'),
-                          stages = c('J', 'SA','A1','A2','A3', 'A4'),
+                          stages = stages,
                           stage_distribution = stage_distribution, 
                           initial_ab = round(paramlist$initial_ab), # adult abundance for populations
                           survival = paramlist$survival, # survival of adults and SA at sites
@@ -160,13 +144,13 @@ N_sim %>% length
 
 
 system.time(N_simulated <- mclapply(1:reps_base, em.extract_N, N_sim,
-                                    mc.cores = 10) %>% 
+                                    mc.cores = 5) %>% 
   do.call('rbind', .) %>% 
   mutate_if(is.character, factor))
 
 nlevels(N_simulated$stage)
 nlevels(N_simulated$pop)
-levels(N_simulated$stage) <- c('J', 'SA', 'A1', 'A2', 'A3', 'A4')
+levels(N_simulated$stage) <- stages
 levels(N_simulated$pop) <- c('CA', 'JE', 'JW', 'MA')
 
 

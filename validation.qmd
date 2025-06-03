@@ -55,3 +55,7 @@ Distribution of parameter estimates from the top models
 The top 25 models were selected for the final parameter estimates
 
 ![](./figures/environmental_models_runs.png)
+
+### Distribution of survival under environmental stochasticity (sd)
+
+![](./figures/environmental_stoch_survival_distribution.png)

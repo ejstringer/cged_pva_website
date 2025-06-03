@@ -78,7 +78,12 @@ transition  = 0.194
 
 # clutch size -------------------------------------------------------------
 
-clutch_sizes <- 4:7
+clutch_sizes <- 3:7
+
+prob_clutch <- dbeta(seq(0.1,0.9, length.out = 5), 2,3)
+prob_clutch/sum(prob_clutch)
+
+mean_clutch <- mean(sample(clutch_sizes, 100000, T, prob_clutch))
 
 # reproductive females ----------------------------------------------------
 
@@ -92,9 +97,9 @@ reproduction <- (repro_lower + sample_data * (repro_upper - repro_lower))
 
 # carrying capacity -------------------------------------------------------
 
-K <- 20*N_start$area_ha %>% round
+K <- round(20*N_start$area_ha)
 names(K) <-  paste('K', N_start$site, sep = '_')
-saveRDS(K, './output/carrying_capcity.rds')
+
 
 # environmental stoch -----------------------------------------------------
 # sd applied to survival yearly  (logit)
@@ -145,7 +150,7 @@ parameter_table <- data.frame(site = N_start$site,
                           transition,
                           reproduction_lower = repro_lower,
                           reproduction_upper = repro_upper,
-                          clutches = mean(clutch_sizes),
+                          clutches = round(mean_clutch,1),
                           clutches_lower = min(clutch_sizes),
                           clutches_upper = max(clutch_sizes),
                           K = K,
@@ -175,7 +180,7 @@ parameter_table <- data.frame(site = N_start$site,
 paramter_fxtb <- parameter_table %>% 
   mutate(distribution = c(rep('truncated normal ', 4), 
                           'uniform/logit normal', rep('logit normal',2),
-                          '', 'uniform', '~beta(2,2)', 'logit uniform',
+                          '', 'uniform', '~beta(2,3)', 'logit uniform',
                           rep('',4))) %>% 
   flextable() %>% 
 autofit() %>%
@@ -206,7 +211,7 @@ distribution_fig <- param_est %>% cbind(env_stochasticity) %>%
          variable = sub('env_stoch_', '', variable),
          variable = sub('F_reproduction', '%', variable)) %>% 
   ggplot(aes(x = value, fill = name))+
-  geom_histogram(colour = 'black', bins = 30)+
+  geom_histogram(colour = 'black', bins = 20)+
   facet_wrap(type~variable, scale = 'free', 
              labeller = labeller(type = param.labs))+
   theme_bw()+
@@ -219,30 +224,40 @@ ggsave('./figures/parameter_priors.png',
        plot = distribution_fig, dpi = 300,
        height = 7, width = 10, units = 'in')
 
+
+
+# stages ------------------------------------------------------------------
+max_age <- 3 
+
+stages <- c('J', 'SA',paste0('A', 1:max_age))
+
 # stage matrix ------------------------------------------------------------
-eigen_analysis <- function(A) {
-  ev <- eigen(A)
-  lmax <- which(Re(ev$values) == max(Re(ev$values)))
-  lambda <- Re(ev$values[lmax])
-  W <- ev$vectors
-  w <- abs(Re(W[, lmax]))
-  stable_age <- w/sum(w)
-  return(list(lambda, stable_age))
+
+
+stage.mat <- matrix(0, 
+                    nrow = max_age+2, ncol = max_age+2, 
+                    byrow = TRUE,
+                    dimnames = list(stages,stages))
+
+# fecundity
+fecund_ages <- which(stages %in% paste0('A', 1:(max_age-1)))
+stage.mat[1,fecund_ages] <- 2.38
+# juvenile survival + growth
+stage.mat[2:3,which(stages == 'J')] <- round(survival_unlogit*c(transition, 1-transition),2)
+
+# adult survival + growth
+for (i in 2:(max_age+2)) {
+  stg <- stages[i]
+  if (stg == 'SA') stage.mat[i+2,i] <- round(survival_unlogit,2)
+  if (stg != 'SA' & i < (max_age+2)) stage.mat[i+1, i] <- round(survival_unlogit,2)
 }
 
-stage.mat <- matrix(c(0, 0, 2.15,2.15,2.15,0,
-                      0.072, 0, 0, 0,0,0,
-                      0.288, 0,0,0,0,0,
-                      0, 0.36,0.36, 0,0,0,
-                      0, 0, 0,0.36,0,0,
-                      0, 0, 0,0,0.36,0), nrow = 6, ncol = 6, byrow = TRUE,
-                    dimnames = list(c('J', 'SA','A1','A2','A3', 'A4'),
-                                    c('J', 'SA','A1','A2','A3', 'A4')))
-
-stage_distribution <- eigen_analysis(stage.mat)[[2]]
+stage.mat
 stagemat_lambda <- eigen_analysis(stage.mat)[[1]]
+stagemat_lambda
+stage_distribution <- eigen_analysis(stage.mat)[[2]]
 
-names(stage_distribution)<- c('J', 'SA','A1','A2','A3', 'A4')
+names(stage_distribution)<- stages
 
 saveRDS(stage_distribution, './output/stage_distribution.rds')
 
@@ -252,9 +267,9 @@ fx_stages <- as.data.frame(stage.mat) %>%
   relocate(stages) %>% 
 flextable() %>% 
   autofit() %>% 
-  vline(j = 1, i = 1:6, part = 'body', border = fp_border_default(width = 1.5)) %>% 
+  vline(j = 1, i = 1:nrow(stage.mat), part = 'body', border = fp_border_default(width = 1.5)) %>% 
   vline(j = 1, part = 'header', border = fp_border_default(width = 1.5)) %>% 
-  hline(i = 6, border = fp_border_default(width = 1.5)) %>% 
+  hline(i = nrow(stage.mat), border = fp_border_default(width = 1.5)) %>% 
   align(j = 1,  align = 'right') %>% 
   align(part = 'header', j  = 1,align = 'right') %>% 
   bold(part = 'header') %>% 
@@ -268,14 +283,24 @@ flextable() %>%
 
 fx_stages %>% save_as_image('./figures/parameter_stage_matrix.png', res = 300)
 
-transition_mat <- matrix(c(0, 0, 0,0,0,0,
-                      0.194, 0, 0, 0,0,0,
-                      0.806, 0,0,0,0,0,
-                      0, 1,1, 0,0,0,
-                      0, 0, 0,1,0,0,
-                      0, 0, 0,0,1,0), nrow = 6, ncol = 6, byrow = TRUE,
-                    dimnames = list(c('J', 'SA','A1','A2','A3', 'A4'),
-                                    c('J', 'SA','A1','A2','A3', 'A4')))
+
+transition_mat <- matrix(0, 
+                    nrow = max_age+2, ncol = max_age+2, 
+                    byrow = TRUE,
+                    dimnames = list(stages,stages))
+
+# juvenile transition
+transition_mat[2:3,which(stages == 'J')] <- c(transition, 1-transition)
+
+# adult survival + growth
+for (i in 2:(max_age+2)) {
+  stg <- stages[i]
+  if (stg == 'SA') transition_mat[i+2,i] <- 1
+  if (stg != 'SA' & i < (max_age+2)) transition_mat[i+1, i] <- 1
+}
+
+transition_mat
+
 
 saveRDS(transition_mat, './output/transition_matrix.rds')
 
@@ -285,7 +310,7 @@ fx_transition<- transition_mat %>%
   relocate(stages) %>% 
   flextable() %>% 
   autofit() %>% 
-  vline(j = 1, i = 1:6, part = 'body', border = fp_border_default(width = 1.5)) %>% 
+  vline(j = 1, i = 1:nrow(transition_mat), part = 'body', border = fp_border_default(width = 1.5)) %>% 
   vline(j = 1, part = 'header', border = fp_border_default(width = 1.5)) %>% 
   align(j = 1,  align = 'right') %>% 
   align(part = 'header', j  = 1,align = 'right') %>% 
@@ -296,3 +321,14 @@ fx_transition<- transition_mat %>%
 
 fx_transition %>% 
   save_as_image('./figures/parameter_transitions.png', res = 300)
+
+
+# save parameters ---------------------------------------------------------
+
+saveRDS(list(age = max_age, K = K, survival = survival_unlogit, 
+             surv_sd = survival_logit_sd,
+             transition = transition,
+             clutch = clutch_sizes, beta = c(2,3)), 
+        './output/base_parameters.rds')
+
+

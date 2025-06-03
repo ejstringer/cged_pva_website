@@ -26,10 +26,16 @@ eigen_analysis <- function(A) {
 source('./code/00_libraries.R')
 source('./code/05_model.R')
 param_starting_estimates <- readRDS('./output/starting_values.rds')
-stage_distribution <- readRDS('./output/stage_distribution.rds')
+stages <- names(readRDS('./output/stage_distribution.rds'))
 transition_mat <- readRDS('./output/transition_matrix.rds')
-K <- readRDS('./output/carrying_capcity.rds')
-clutch_sizes <- 4:7
+# K <- readRDS('./output/carrying_capcity.rds')
+# clutch_sizes <- 4:7
+base_params <- readRDS('./output/base_parameters.rds')
+max_age <- base_params$age
+K <- base_params$K
+clutch_sizes <- base_params$clutch
+transition <- base_params$transition
+
 param_selected <- readRDS('./output/selected_25models_parameters.RDS')
 param_selecteddf <-readRDS('./output/selected_25models_parameters_df.RDS')
 # stage distribution ------------------------------------------------------
@@ -44,24 +50,39 @@ fecundity <- (mean(param_selecteddf$mean[param_selecteddf$name == 'F_reproductio
 ASAsur_site <- (param_selecteddf$mean[grep('survival_A', param_selecteddf$name)])
 Jt_site <- (param_selecteddf$mean[grep('survival_J', param_selecteddf$name)])
 
-stage.mat <- list()
-for (i in 1:4) {
-  ASAsur <- ASAsur_site[i]
-  Jt <- Jt_site[i]
+stage.mat_list <- list()
+for (pop in 1:4) {
+  ASAsur <- ASAsur_site[pop]
+  Jt <- Jt_site[pop]
   
-  stage.mat[[i]] <- matrix(c(0, 0, rep(fecundity,3),0,
-                      Jt*0.194, 0, 0, 0,0,0,
-                      Jt*0.806, 0,0,0,0,0,
-                      0, ASAsur,ASAsur, 0,0,0,
-                      0, 0, 0,ASAsur,0,0,
-                      0, 0, 0,0,ASAsur,0.01), nrow = 6, ncol = 6, byrow = TRUE,
-                    dimnames = list(c('J', 'SA','A1','A2','A3', 'A4'),
-                                    c('J', 'SA','A1','A2','A3', 'A4')))
+  stage.mat <- matrix(0, 
+                      nrow = length(stages),
+                      ncol = length(stages),
+                      byrow = TRUE,
+                      dimnames = list(stages,
+                                      stages))
+  
+  # fecundity
+  fecund_ages <- which(stages %in% paste0('A', 1:(max_age-1)))
+  stage.mat[1,fecund_ages] <- fecundity
+  # juvenile survival + growth
+  stage.mat[2:3,which(stages == 'J')] <- Jt*c(transition, 1-transition)
+  
+  # adult survival + growth
+  for (i in 2:(max_age+2)) {
+    stg <- stages[i]
+    if (stg == 'SA') stage.mat[i+2,i] <- ASAsur
+    if (stg != 'SA' & i < (max_age+2)) stage.mat[i+1, i] <- ASAsur
+  }
+  
+  stage.mat[length(stages), length(stages)] <- 0.001
+  stage.mat_list[[pop]] <- stage.mat
+  
 }
 output_list <- list()
 for (pop in 1:4) {
   
-mat <- stage.mat[[pop]]
+mat <- stage.mat_list[[pop]]
 
 
 vals <- c(1.01, 1.05, 1.1)
@@ -91,8 +112,13 @@ for (w in c(1: length(vals))) {
   output[w,] <- as.vector(t(results[[w]]))[which(as.vector(t(results[[w]])) >0)]
 }
 
-colnames(output) <- c('fecA1', 'fecA2', 'fecA3', 'JsurvSA', 'JsurvA', 
-                      'SAsurvA1', 'A1surv','A2surv','A3surv','A4surv')
+output
+
+colnames(output) <- c(paste0('fec', stages[which(testlam[1,] >0)]),
+                      paste0('Jsur', stages[which(testlam[,1] >0)]),
+                      paste0('SAsur', stages[which(testlam[,2] >0)]),
+                      paste0(stages[!stages %in% c('J', 'SA')], 'surv'))
+
 
 
 lambda <- Re(eigen(mat)$values[1])
@@ -178,25 +204,40 @@ Jt<- mean(param_selecteddf$mean[grep('survival_J', param_selecteddf$name)])
 
 
   
-  stage.mat_mean <- matrix(c(0, 0, rep(fecundity,3),0,
-                             Jt*0.194, 0, 0, 0,0,0,
-                             Jt*0.806, 0,0,0,0,0,
-                             0, ASAsur,ASAsur, 0,0,0,
-                             0, 0, 0,ASAsur,0,0,
-                             0, 0, 0,0,ASAsur,0.01), nrow = 6, ncol = 6, byrow = TRUE,
-                           dimnames = list(c('J', 'SA','A1','A2','A3', 'A4'),
-                                           c('J', 'SA','A1','A2','A3', 'A4')))
+stage.mat_mean <- matrix(0, 
+                    nrow = length(stages),
+                    ncol = length(stages),
+                    byrow = TRUE,
+                    dimnames = list(stages,
+                                    stages))
 
+# fecundity
+fecund_ages <- which(stages %in% paste0('A', 1:(max_age-1)))
+stage.mat_mean[1,fecund_ages] <- fecundity
+# juvenile survival + growth
+stage.mat_mean[2:3,which(stages == 'J')] <- Jt*c(transition, 1-transition)
+
+# adult survival + growth
+for (i in 2:(max_age+2)) {
+  stg <- stages[i]
+  if (stg == 'SA') stage.mat_mean[i+2,i] <- ASAsur
+  if (stg != 'SA' & i < (max_age+2)) stage.mat_mean[i+1, i] <- ASAsur
+}
+
+stage.mat_mean[length(stages), length(stages)] <- 0.001
+
+stage.mat_mean
+eigen_analysis(stage.mat_mean)
 
 emat <- popbio::elasticity(stage.mat_mean)
 
-sumfec <- sum(emat[1,3:6])
+sumfec <- sum(emat[1,!(stages %in% c('J', 'SA'))])
 sumgrow <- sum(emat[2:3,1])
 sumgrow2 <- sum(emat[4,2])
-sumstasis <- sum(emat[3:6,3:6])
+sumstasis <- sum(emat[3:length(stages),3:length(stages)])
 
 
-par(mar=c(4,4,4,4))
+par(mar=c(5.1, 4.1, 4.1, 2.1))
 barplot(c(fecundity = sumfec, Juv = sumgrow, SA = sumgrow2, Adult = sumstasis), 
         col = c("gray50", "#6AA341",'#6AA990', "gray90"), ylim = c(0,0.4),
         xlab = 'Fecundity / growth + Survival', ylab = 'Elasticity')
@@ -211,7 +252,7 @@ pie(c(sumfec,sumgrow,sumgrow2, sumstasis), col = c("gray50", "#6AA341",'#6AA990'
     labels=c("fecundity","growth+survival J","growth+survival SA", "growth+survival A"))
 
 dev.off()
-
+par(mar=c(5.1, 4.1, 4.1, 2.1))
 
 ematround <- round(emat, 3)
 ematround[mat == 0] <- ''

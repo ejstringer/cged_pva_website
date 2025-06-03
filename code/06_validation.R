@@ -1,35 +1,16 @@
 figprefix <- ''
 
 # load --------------------------------------------------------------------
-em.extract_ASA <- function(sim){
-  tstep <- dim(sim)[3]
-  
-  asa <- sapply(1:tstep, function(x) colSums(sim[2:6,,x,]))
-  colnames(asa) <- 2013:(2012+tstep)
-  rownames(asa) <- c('CA', 'JE', 'JW', 'MA')
-  asa
-}
-
-em.sample.distribution <- function(x, samplesize = 10000){
-  #https://stats.stackexchange.com/questions/191725/sample-from-distribution-given-by-histogram
-  xhist=hist(x,freq=FALSE, col=rgb(0,0,1,1/4))
-  # sample from it
-  bins=with(xhist,sample(length(mids),samplesize,p=density,replace=TRUE)) # choose a bin
-  result=runif(length(bins),xhist$breaks[bins],xhist$breaks[bins+1]) # sample a uniform in it
-  hist(result,freq=FALSE,add=TRUE,bord=1, col = rgb(1,0,0,1/4))
-  
-  return(result)
-}
-
-
+source('./code/00_libraries.R')
 source('./code/05_model.R')
 param_starting_estimates <- readRDS('./output/starting_values.rds')
 stage_distribution <- readRDS('./output/stage_distribution.rds')
 transition_mat <- readRDS('./output/transition_matrix.rds')
-K <- readRDS('./output/carrying_capcity.rds')
-clutch_sizes <- 4:7
-survival_unlogit <- 0.36
-survival_logit_sd <- 0.2515
+base_params <- readRDS('./output/base_parameters.rds')
+K <- base_params$K
+clutch_sizes <- base_params$clutch
+survival_unlogit <- base_params$survival
+survival_logit_sd <- base_params$surv_sd
 
 n_real <- read.csv('./output/real_abundance_for_comparison.csv')
 n_real$ucl_all[n_real$N_all < 1 &n_real$ucl_all==0] <- n_real$N[n_real$N_all < 1 &n_real$ucl_all==0]*n_real$area_ha[n_real$N_all < 1 &n_real$ucl_all==0]
@@ -61,7 +42,7 @@ param_dist <- split(as.data.frame(param_est), rownames(param_est))
 sapply(lapply(param_dist, function(param) param$env_stoch), class)
 N_sim <- lapply(param_dist, 
                 function(param) em.pva_simulator(populations = c('CA', 'JE', 'JW', 'MA'),
-                                                 stages = c('J', 'SA','A1','A2','A3', 'A4'),
+                                                 stages = names(stage_distribution),
                                                  stage_distribution = stage_distribution, 
                                                  initial_ab = unlist(param[1,grep('init', colnames(param))]), # adult abundance for populations
                                                  survival = survival_unlogit, # survival of adults and SA at sites
@@ -227,7 +208,7 @@ em.parameters_to_df <- function(param_est){
   param_est3 <- cbind(param_est2, juv_site_survival)
   param_est3 %>% as.data.frame %>%
     relocate(round) %>% 
-    pivot_longer(cols = N_init_CA:survival_J_MA) %>% 
+    pivot_longer(-round) %>% 
     mutate(type = ifelse(grepl('init', name), 'inititial N', 'value'),
            type = ifelse(grepl('quality', name), 'site quality', type),
            type = ifelse(name %in% c('survival_juv', 'F_reproduction'),
@@ -241,8 +222,8 @@ paramer_optermisation <- lapply(parameter_estimates2, em.parameters_to_df) %>%
 
 
 paramer_optermisation$name %>% table
-
-paramer_optermisation %>% filter(round != 6, 
+n_p <- length(parameter_estimates)-1
+paramer_optermisation %>% filter(round != n_p, 
                                  !grepl('adjust', name),
                                  name != 'survival_ju', 
                                  name != 'F_reproductio') %>%  
@@ -254,12 +235,12 @@ paramer_optermisation %>% filter(round != 6,
   ggplot(aes(y=round_reordered, x=value, fill = round))+
   geom_boxplot()+
   facet_wrap(~name, scale = 'free', ncol = 4)+
-  scale_fill_manual(values = adegenet::virid(9)[4:9],
+  scale_fill_manual(values = adegenet::virid(n_p+3)[4:(n_p+3)],
                     name = 'Simulation round')+
   theme_bw()+
   theme(legend.position = 'inside',
         legend.direction = 'horizontal',
-        legend.position.inside = c(0.75,0.06),
+        legend.position.inside = c(0.75,0.09),
         strip.background = element_blank(),
         strip.text = element_text(face = 'bold'),
         axis.title.y = element_blank(),

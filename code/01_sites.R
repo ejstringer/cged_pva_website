@@ -8,7 +8,7 @@ exotic <- vect('./data/grasslands/exotic_map.shp')
 
 
 # buffer around ntg (metres)
-buffer_metres <- 1
+buffer_metres <- 0.01
 
 # site size ---------------------------------------------------------------
 ## fix layers

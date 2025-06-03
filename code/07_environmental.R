@@ -1,32 +1,19 @@
 
-em.extract_ASA <- function(sim){
-  tstep <- dim(sim)[3]
-  
-  asa <- sapply(1:tstep, function(x) colSums(sim[2:6,,x,]))
-  colnames(asa) <- 2013:(2012+tstep)
-  rownames(asa) <- c('CA', 'JE', 'JW', 'MA')
-  asa
-}
-
-em.sample.distribution <- function(x, samplesize = 10000){
-  #https://stats.stackexchange.com/questions/191725/sample-from-distribution-given-by-histogram
-  xhist=hist(x,freq=FALSE, col=rgb(0,0,1,1/4))
-  # sample from it
-  bins=with(xhist,sample(length(mids),samplesize,p=density,replace=TRUE)) # choose a bin
-  result=runif(length(bins),xhist$breaks[bins],xhist$breaks[bins+1]) # sample a uniform in it
-  hist(result,freq=FALSE,add=TRUE,bord=1, col = rgb(1,0,0,1/4))
-  
-  return(result)
-}
 # load --------------------------------------------------------------------
 figprefix <- ''
 source('./code/00_libraries.R')
 source('./code/05_model.R')
 param_starting_estimates <- readRDS('./output/starting_values.rds')
-stage_distribution <- readRDS('./output/stage_distribution.rds')
+stages <- names(readRDS('./output/stage_distribution.rds'))
 transition_mat <- readRDS('./output/transition_matrix.rds')
-K <- readRDS('./output/carrying_capcity.rds')
-clutch_sizes <- 4:7
+base_params <- readRDS('./output/base_parameters.rds')
+max_age <- base_params$age
+K <- base_params$K
+clutch_sizes <- base_params$clutch
+transition <- base_params$transition
+# survival_unlogit <- base_params$survival
+# survival_logit_sd <- base_params$surv_sd
+
 param_selected <- readRDS('./output/selected_25models_parameters.RDS')
 param_selecteddf <-readRDS('./output/selected_25models_parameters_df.RDS')
 
@@ -35,32 +22,35 @@ n_real$ucl_all[n_real$N_all < 1 &n_real$ucl_all==0] <- n_real$N[n_real$N_all < 1
 
 # stage distribution ------------------------------------------------------
 
-eigen_analysis <- function(A) {
-  ev <- eigen(A)
-  lmax <- which(Re(ev$values) == max(Re(ev$values)))
-  lambda <- Re(ev$values[lmax])
-  W <- ev$vectors
-  w <- abs(Re(W[, lmax]))
-  stable_age <- w/sum(w)
-  return(list(lambda, stable_age))
-}
-
-
 fecundity <- (mean(param_selecteddf$mean[param_selecteddf$name == 'F_reproduction'])*0.5)*5.5 
 ASAsur <- mean(param_selecteddf$mean[grep('survival_A', param_selecteddf$name)])
 Jt <- mean(param_selecteddf$mean[grep('survival_J', param_selecteddf$name)])
 
-stage.mat <- matrix(c(0, 0, rep(fecundity,3),0,
-                      Jt*0.194, 0, 0, 0,0,0,
-                      Jt*0.806, 0,0,0,0,0,
-                      0, ASAsur,ASAsur, 0,0,0,
-                      0, 0, 0,ASAsur,0,0,
-                      0, 0, 0,0,ASAsur,0), nrow = 6, ncol = 6, byrow = TRUE,
-                    dimnames = list(c('J', 'SA','A1','A2','A3', 'A4'),
-                                    c('J', 'SA','A1','A2','A3', 'A4')))
+stage.mat <- matrix(0, 
+                    nrow = length(stages),
+                    ncol = length(stages),
+                    byrow = TRUE,
+                    dimnames = list((stages),
+                                    (stages)))
+
+# fecundity
+fecund_ages <- which(stages %in% paste0('A', 1:(max_age-1)))
+stage.mat[1,fecund_ages] <- fecundity
+# juvenile survival + growth
+stage.mat[2:3,which(stages == 'J')] <- Jt*c(transition, 1-transition)
+
+# adult survival + growth
+for (i in 2:(max_age+2)) {
+  stg <- stages[i]
+  if (stg == 'SA') stage.mat[i+2,i] <- ASAsur
+  if (stg != 'SA' & i < (max_age+2)) stage.mat[i+1, i] <- ASAsur
+}
+
+stage.mat
+eigen_analysis(stage.mat)
 
 stage_distribution <- eigen_analysis(stage.mat)[[2]]
-names(stage_distribution)<- c('J', 'SA','A1','A2','A3', 'A4')
+names(stage_distribution)<- stages
 
 
 
@@ -88,19 +78,40 @@ paramlist <- list(populations = c('CA', 'JE', 'JW', 'MA'),
 reps = 50000
 # sd applied to survival yearly  (logit)
 stoch <- seq(0,3,0.1)
-
+par(mar = c(5.1, 4.1, 4.1, 2.1))
 plot(x = NULL, y = NULL, xlim = c(0,3), ylim = c(0,1), ylab = 'survival', xlab = 'sd')
+abline(h = 0.975, col = 'grey', lty = 2)
+abline(h = 0.025, col = 'grey', lty = 2)
+abline(h = 0, col = 'grey')
+abline(h = 1, col = 'grey')
 for (i in 1:4) {
 site <- i
 m2 <- sapply(stoch, function(x) unlogit(qnorm(c(0.025), mean = logit(paramlist$survival[site]), sd = x)))
 m3 <- sapply(stoch, function(x) unlogit(qnorm(c(0.975), mean = logit(paramlist$survival[site]), sd = x)))
 lines(c(stoch), c(m2), col = i)
 lines(c(stoch), c(m3), col = i)
- 
 }
 
+
+plot(x = NULL, y = NULL, xlim = c(0,3), ylim = c(-8,8), ylab = 'survival', xlab = 'sd')
+abline(h = logit(0.975), col = 'grey', lty = 2)
+abline(h = logit(0.025), col = 'grey', lty = 2)
+
+abline(h = logit(0.995), col = 'pink', lty = 3)
+abline(h = logit(0.005), col = 'pink', lty = 3)
+
+for (i in 1:4) {
+  site <- i
+  m2 <- sapply(stoch, function(x) (qnorm(c(0.025), mean = logit(paramlist$survival[site]), sd = x)))
+  m3 <- sapply(stoch, function(x) (qnorm(c(0.975), mean = logit(paramlist$survival[site]), sd = x)))
+  lines(c(stoch), c(m2), col = i)
+  lines(c(stoch), c(m3), col = i)
+}
+
+
+
 env_lower <- 0
-env_upper <- 2.5 # logit scale
+env_upper <- 2 # logit scale
 
 
 sample_data <- randomLHS(reps, length(paramlist$populations))
@@ -121,7 +132,7 @@ param_starting_estimates <- param_est
 parameter_estimates <- list()
 
 parameter_estimates[[1]] <- param_starting_estimates
-no.runs <- c(1,1,1,2,1)*20000
+no.runs <- c(1,1,1,2,1)*10000
 topModels <- 100
 nrow(parameter_estimates[[1]])
 head(parameter_estimates[[1]])
@@ -144,7 +155,7 @@ system.time({for (r in 1:length(no.runs)) {
   sapply(lapply(param_dist, function(param) param$env_stoch), class)
   N_sim <- mclapply(param_dist, 
                   function(param) em.pva_simulator(populations = c('CA', 'JE', 'JW', 'MA'),
-                                                   stages = c('J', 'SA','A1','A2','A3', 'A4'),
+                                                   stages = stages,
                                                    stage_distribution = stage_distribution, 
                                                    initial_ab = round(paramlist$initial_ab), # adult abundance for populations
                                                    survival = paramlist$survival, # survival of adults and SA at sites
@@ -178,10 +189,12 @@ system.time({for (r in 1:length(no.runs)) {
   
   sim_sd <- do.call('rbind', simdf_list) %>%
     left_join(n_real, by = c('year', 'site')) %>% 
-    filter(Nsim > 0) %>% 
+    #filter(Nsim > 0) %>% 
     group_by(run, site) %>% 
+    # summarise(sd_real = sd(log(N_all+1), na.rm = T),
+    #        sd_sim = sd(log(Nsim+1), na.rm = T)) %>% 
     summarise(sd_real = sd(log(N_all+1), na.rm = T),
-           sd_sim = sd(log(Nsim+1), na.rm = T)) %>% 
+              sd_sim = sd(log(Nsim+1), na.rm = T)) %>% 
     mutate(sd_diff = abs(sd_sim - sd_real))
   
   simdf <- do.call('rbind', simdf_list) %>%
@@ -244,8 +257,11 @@ system.time({for (r in 1:length(no.runs)) {
 
 m5perc <- quantile(best_model_fits$diff, 25/length(simdf_list))
 
+
 simdf_best <- left_join(simdf, best_model_fits) %>% 
   mutate(bestx = diff < m5perc)
+
+sim_sample <- simdf_best$run %in% unique(simdf_best$run)[sample(1:no.runs[4],10000)]
 
 fig_val <- ggplot(n_real, aes(year, N_all, fill = site))+
   geom_ribbon(aes(ymax = ucl_all, ymin = lcl_all), alpha = 0.7)+
@@ -265,7 +281,8 @@ fig_val <- ggplot(n_real, aes(year, N_all, fill = site))+
   theme(panel.grid = element_blank())
 
 fig_val + scale_y_log10(labels = label_comma())
-ggsave(paste0('./figures/',figprefix, 'environmental_models_runs.png'),dpi = 300,
+ggsave(paste0('./figures/',figprefix, 'environmental_models_runs.png'),
+       dpi = 300,
        height = 6, width = 10, units = 'in')
 
 simdf_best_save <- filter(simdf_best, bestx)
@@ -355,7 +372,7 @@ paramlist$survival
 surv_plot <- data.frame(survival = logit(paramlist$survival), 
            sd = apply(param_selected, 2, summary)[4,]) 
 
-qp <- seq(0.01, 0.99, 0.001)
+qp <- seq(0.001, 0.999, 0.001)
 
 mat_surv <- sapply(1:4, function(x) dnorm(logit(qp), 
                               mean = surv_plot$survival[x],
@@ -371,15 +388,20 @@ mat_surv %>% mutate(survival = qp,survival_logit= logit(qp)) %>%
   mutate(site = sub('env_stoch_', '', name)) %>% 
   ggplot(aes(x = surv, y = value, colour = site))+
   geom_line()+
-  facet_wrap(x~site, scale = 'free', ncol = 4)+
+  facet_grid(site~x, scale = 'free')+
   theme_bw()+
-  theme(strip.background = element_blank())+
-  xlab('survival')+
-  ylab('density')
+  theme(strip.background.y = element_rect(fill = 'grey50', linewidth = 0),
+        strip.background.x =  element_blank(),
+        strip.text.y.right = element_text(angle = 0, face = 'bold', colour = 'white'),
+        strip.text.x.top = element_text(face = 'bold', size = 12),
+        panel.grid = element_blank(),
+        legend.position = 'none')+
+  xlab('Survival')+
+  ylab('Density')
 
-q<- qnorm(seq(0.01,0.99, 0.001), mean = -0.19, sd = 0.17)
+ggsave(paste0('./figures/',figprefix, 
+              'environmental_stoch_survival_distribution.png'),
+       dpi = 300, height = 6, width = 6, units = 'in')
 
-d <- dnorm(q, mean = -0.19, sd = 0.17)
 
-plot(unlogit(q), d)
 

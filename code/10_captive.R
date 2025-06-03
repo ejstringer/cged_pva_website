@@ -1,7 +1,6 @@
 
-library(tidyverse)
-library(lubridate)
-library(pscl)
+source('code/00_libraries.R')
+source('code/05_model.R')
 # load --------------------------------------------------------------------
 
 # zims data 
@@ -149,7 +148,8 @@ tb_clutches <- table(clutches_mums$dam.id,
 table(tb_clutches)
 # only one mother had 4 so will consider this an outlier and not model
 n_clutches <- table(tb_clutches)[-c(1,5)]
-perc_n <- n_clutches/sum(n_clutches)
+perc_n <- as.vector(n_clutches/sum(n_clutches))
+names(perc_n) <- names(n_clutches)
 round(perc_n,2) 
 
 barplot(perc_n)
@@ -193,7 +193,7 @@ AIC(m1, mnull) # do not reject null model
 
 
 
-perc_hatch <- sum(momsbirth$number.hatched)/sum(momsbirth$clutch.size)
+perc_hatch <- sum(clutches_mums$number.hatched)/sum(clutches_mums$clutch.size)
 
 surv0_1 <- survival_m$surv[1]
 
@@ -216,7 +216,10 @@ perc_n # probability of number of clutches
 
 perc_beta # prob of clutch size
 
-
+captive_params <- list(K = Ktid, survival = adult_survival,
+                       juv_surv = juv_survival, f_repro = perc_repro,
+                       n_clutches = perc_n)
+saveRDS(captive_params, './output/colony_parameters.rds')
 #### _________________ ####
 # model -------------------------------------------------------------------
 for(sub in 1:2){
