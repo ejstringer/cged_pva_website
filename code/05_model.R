@@ -182,21 +182,30 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
       
       
       ## carrying capacity ---------
-      adults <- colSums(N[2:n_stages,,yr,i])
-      
-      if(sum(adults > K)>0){
-        sites_K <- which(adults>K)
-          
-        adult.stages <- stage_distribution[-1] 
-        adults.dist <- adult.stages/sum(adult.stages)
-        K.stages <- round(sapply(K[sites_K], function(x) adults.dist*x))
-        for(age in 2:n_stages){
-          current_N <-  N[age, sites_K, yr, i]
-          N[age, sites_K, yr, i]<- ifelse(current_N > K.stages[age-1,],
-                                   K.stages[age-1,], current_N) 
-        }
-        
-      }
+      # adults <- colSums(N[2:n_stages,,yr,i])
+      # 
+      # if(sum(adults > K)>0){
+      #   sites_K <- which(adults>K)
+      #     
+      #   adult.stages <- stage_distribution[-1] 
+      #   adults.dist <- adult.stages/sum(adult.stages)
+      #   K.stages <- round(sapply(K[sites_K], function(x) adults.dist*x))
+      #   for(age in 2:n_stages){
+      #     current_N <-  N[age, sites_K, yr, i]
+      #     N[age, sites_K, yr, i]<- ifelse(current_N > K.stages[age-1,],
+      #                              K.stages[age-1,], current_N) 
+      #   }
+      #   
+      # }
+     
+      total <- colSums(N[, , yr, i])
+   
+      extra_N <- ifelse((total - K)>0, total - K, 0)
+      K_correct <- sapply(extra_N, function(x) table(factor(sample(stages, 
+                                                      size = x,
+                                                      replace = T), 
+                                               levels = stages)))
+      N[, , yr, i] <- unname(N[, , yr, i] - K_correct)
     
     }
     
