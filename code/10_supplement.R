@@ -51,7 +51,7 @@ total_suplemented <- (seq(12,500, 4))
 length(total_suplemented)
 
 supplement_distribution<- t(sapply(rep(4,reps), em.sup.distribution))
-#colnames(supplement_distribution) <- paste('sup', grasslands, sep = '_')
+colnames(supplement_distribution) <- paste('sup', grasslands, sep = '_')
 supplement_sample <- list()
 for (i in 1:length(total_suplemented)) {
   supplement_distribution*total_suplemented[i]
@@ -66,7 +66,7 @@ nrow(supplement_sample_df)
 # supp take two -----------------------------------------------------------
 
 em.sup_across_pops <- function(n.supp = 100, n.pops = 4){
-  x <- seq(0,n.supp, length.out = 11)
+  x <- seq(0,n.supp, length.out = 6)
   x_round <- round(x)
   
   if (sum(!(x == x_round))>0) print('rounded x') 
@@ -88,16 +88,17 @@ sum(sapply(supplement_sample, nrow))
 
 
 supplement_sample_df <- do.call('rbind', supplement_sample) %>% 
-  data.frame(n = 1:(sum(sapply(supplement_sample, nrow))*10), .,
+  data.frame(n = 1:(sum(sapply(supplement_sample, nrow))*100), .,
            row.names = NULL) %>% 
   select(-n)
 
 nrow(supplement_sample_df)
-set.seed(13456)
+set.seed(13457)
 rownames(supplement_sample_df) <- paste0(
   stri_rand_strings(nrow(supplement_sample_df), 4, "[A-Z]"),
   stri_rand_strings(nrow(supplement_sample_df), 4, "[0-9]"))
 
+colnames(supplement_sample_df) <- grasslands
 supplement_sample_df
 # model setup -------------------------------------------------------------
 t_steps <- 50
@@ -112,7 +113,7 @@ reps <- nrow(supplement_sample_df)
 sup_dist <- split(as.data.frame(supplement_sample_df),
                   rownames(supplement_sample_df))
 sup_dist[[1]]
-N_sim <- lapply(sup_dist, 
+N_sim <- mclapply(sup_dist, 
                 function(param_sup) em.pva_simulator(populations = grasslands,
                           stages = stages,
                           stage_distribution = stage_distribution, 
@@ -131,17 +132,14 @@ N_sim <- lapply(sup_dist,
                           supp = supplement,
                           stage.supp = 1,
                           n.supp = unname(unlist(param_sup)), 
-                          when.supp = seq_suplementation))
-
+                          when.supp = seq_suplementation), mc.cores = 10)
+length(N_sim)
 system.time(sim_N <- mclapply(N_sim, function(x) em.extract_N(1,x), mc.cores = 10))
 for (i in 1:length(N_sim)) sim_N[[i]]$run <- names(sim_N)[i]
 
 N_simulated <- do.call('rbind', sim_N)%>% 
   mutate_if(is.character, factor)
-# system.time(N_simulated <- mclapply(1:reps, em.extract_N, N_sim,
-#                                     mc.cores = 10) %>% 
-#               do.call('rbind', .) %>% 
-#               mutate_if(is.character, factor))
+
 nlevels(N_simulated$stage)
 nlevels(N_simulated$pop)
 levels(N_simulated$stage) <- stages
@@ -149,18 +147,125 @@ levels(N_simulated$pop) <- grasslands
 
 
 sim_N_sum <- N_simulated %>% 
-  filter(stage != 'J', tstep == 20) %>% 
-  group_by(run, tstep, pop) %>% 
+ # filter(stage != 'J') %>% 
+  mutate(age = ifelse(stage == 'J', 'N_Juv', 'N_adult')) %>% 
+  group_by(run, tstep, pop, age) %>% 
   summarise(N = sum(N)) %>% 
-  mutate(extinct = N < 2,
-         year = tstep +2012)
-sum(sim_N_sum$extinct)
+  mutate(year = tstep +2012) %>% 
+  pivot_wider(names_from = age, values_from = N) %>% 
+  mutate(N = N_Juv + N_adult)
 
+
+sim_N_sum_supp <- supplement_sample_df %>% 
+  as.data.frame() %>% 
+  mutate(run = rownames(.),
+         supp_dist = paste(CA,JE, JW, MA)) %>% 
+  pivot_longer(-c(run, supp_dist), names_to = 'pop', values_to = 'n_supp') %>% 
+  right_join(sim_N_sum)  %>% 
+  mutate(supp_group = cut(n_supp, #https://www.r-bloggers.com/2020/09/how-to-convert-continuous-variables-into-categorical-by-creating-bins/
+                          breaks = unique(quantile(n_supp, 
+                                                   probs=seq.int(0,1, by=1/40)), 
+                                          include.lowest=TRUE)),
+         supp_group = ifelse(is.na(supp_group), '(-1,0]',
+                             as.character(supp_group)),
+         supp_group = factor(supp_group),
+         supp = sub('*\\(', '', supp_group),
+         supp = sub(']', '', supp)) %>% 
+  separate(supp, into = c('min_supp', 'max_supp'), sep = ',') %>% 
+  mutate(max_supp = as.numeric(max_supp), 
+         extinct = N < 2)
+
+head(sim_N_sum_supp)
+
+
+# N ~ tsteps  -------------------------------------------------------------
+summary(1:100)
+quantile(1:100, 0.25)
+pg1 <- sim_N_sum_supp %>% 
+  filter(n_supp %in% c(4,40,400),
+         tstep > 8) %>% 
+  group_by(tstep, year, pop, n_supp) %>% 
+  summarise(N_mean = mean(N),
+            N_sd = sd(N),
+            q95 = quantile(N, 0.95),
+            q05 = quantile(N, 0.05)) %>% 
+  left_join(data.frame(pop = grasslands, K = K)) %>%
+  mutate(K = ifelse(K < (q95), K, NA)) %>% 
+  ggplot(aes(year, N_mean, colour = pop, fill = pop))+
+  facet_grid(n_supp~pop, scale = 'free')+
+  geom_ribbon(aes(ymin = q05, ymax=q95), alpha = 0.2, colour = NA)+
+  geom_point()+
+  geom_line()+
+    theme_bw()+
+  geom_hline(aes(yintercept = K), colour = 'grey', lwd = 0.75, lty = 1)+
+  geom_hline(aes(yintercept = K), colour = 'black', lwd = 1, lty = 3)
+  
+ggsave('./figures/supplementation_440400_supp.png',
+       plot = pg1, units = 'cm',
+       height = 16, width = 20)
+
+# N ~ n.supp --------------------------------------------------------------
+sim_N_sum_supp_2050 <- sim_N_sum_supp %>% 
+  filter(year == 2050) %>% 
+  mutate(extinct = N < 2) %>% 
+  group_by(n_supp, pop) %>% 
+  summarise(N_mean = mean(N),
+            N_sd = sd(N),
+            q95 = quantile(N, 0.95),
+            q05 = quantile(N, 0.05),
+            N_adult_mean = mean(N_adult),
+            N_adult_sd = sd(N_adult),
+            q95_adult = quantile(N_adult, 0.95),
+            q05_adult = quantile(N_adult, 0.05),
+            ext_prob = sum(extinct)/n())
+
+supp_seq <- sort(unique(sim_N_sum_supp$n_supp)) 
+supp_seq[!supp_seq %in% c(64, 180, 320, 360, 480)]
+
+sim_N_sum_supp_2050 %>% 
+  filter(n_supp != 0) %>% 
+  ggplot(aes(n_supp, N_adult_mean, colour = pop, fill = pop))+
+  geom_line()+
+  geom_point()+
+  facet_grid(rows = vars(pop), scale = 'free')+
+  geom_ribbon(aes(ymin = q05_adult, ymax = q95_adult), alpha = 0.3,
+              lwd = 0.2)+
+#  scale_x_log10(breaks = supp_seq[!supp_seq %in% c(36, 100, 200, 500,64, 180, 320, 360, 480)])+
+  scale_x_continuous(n.breaks = 20)+
+  theme_bw()+
+  #geom_hline(yintercept = c(50), lty =2, colour = 'gold')+
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        legend.position = 'none')
+
+ggsave('./figures/supplementation_2050_supp.png',
+       units = 'cm',
+       height = 16, width = 20)
+
+# Ext ~ n.supp
+sim_N_sum_supp_2050 %>% 
+  filter(n_supp > 0) %>% 
+  mutate(prob_0 = ext_prob == 0) %>% 
+  ggplot(aes(n_supp, ext_prob, colour = prob_0))+
+  geom_line()+
+  geom_point()+
+  facet_grid(rows = vars(pop), scale = 'free_x')+
+  theme_bw()+
+  geom_hline(yintercept = 0.05, lty = 2)+
+ # scale_x_log10(breaks = supp_seq[!supp_seq %in% c(64, 160,36, 40, 100, 240, 500,180, 320, 360, 480)])+
+  scale_x_continuous(n.breaks = 20)+
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())+
+  geom_vline(xintercept = 0)
+
+ggsave('./figures/supplementation_2050_supp_extprob.png',
+       units = 'cm',
+       height = 16, width = 20)
 
 # plots -------------------------------------------------------------------
 pop.labs <- paste(grasslands, K, sep = ':')
 names(pop.labs) <- grasslands
-colnames(supplement_sample_df) <- grasslands
+
 
 sim_N_sum_supp <- supplement_sample_df %>% 
   as.data.frame() %>% 
@@ -201,7 +306,8 @@ table((sim_N_sum_supp$supp_group))
   theme(strip.text.y.right = element_text(angle = 0))
 
   
-extinction_prob <- sim_N_sum_supp %>% ungroup() %>%  
+ extinction_prob <- sim_N_sum_supp %>% ungroup() %>%  
+   mutate(extinct = N < 2) %>% 
   group_by(tstep,pop, max_supp) %>% 
   summarise(sims = n(),
             sim0 = sum(extinct),
@@ -210,12 +316,12 @@ extinction_prob <- sim_N_sum_supp %>% ungroup() %>%
 tail(extinction_prob)
 
 extinction_prob %>% 
-  #filter(max_supp >0) %>% 
-  ggplot(aes(max_supp, ext_p, colour = extinct_prob))+
+  filter(tstep >20) %>% 
+  ggplot(aes(max_supp, ext_p, colour = tstep))+
   geom_point(alpha = 0.7)+
-  geom_line()+
+#  geom_line()+
   facet_wrap(~pop)+
-  scale_x_log10()+
+ # scale_x_log10()+
   theme_light()+
   geom_hline(yintercept = 0.05) -> g;g
 

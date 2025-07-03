@@ -20,7 +20,7 @@ second year hatchlings = 25 with 10-15 surviving
 
 Optimistic juvenile survival = 0.6
 
-Pessimistic juvenile survival = 0.15 (from Wendy Dimonds PVA 0.334<sub>summer</sub> \* 0.443<sub>winter</sub> juvenile survival)
+Pessimistic juvenile survival = 0.15 (from Wendy Dimonds PVA 0.334<sub>summer</sub> 0.443<sub>winter</sub> juvenile survival)
 
 ### Transition
 
@@ -30,15 +30,25 @@ transition to SA = 0.194 (from Wendy Dimonds PVA)
 
 fecundity unknown
 
+We will estimate percent of females reproducing using a uniform prior ranging 0 to 1. However, this will ideally be refined based on ring tank data of offspring relatedness.
+
 clutch size = 5.5 with a range of 4 to 7 (from Wendy Dimonds PVA where she uses a beta(2) distribution)
+
+Changed to range of 3-7 with a beta distribution of beta(2,3) based on captive colony (UC)
 
 ### Environmental Stoch
 
-Tried to use NDVI and LST but did not have enough predictive power - so envrionmental stochasticity will be estimated.
+Tried to use NDVI and LST but did not have enough predictive power - so envrionmental stochasticity will be estimated separately to all other parameters.
 
 ### Carrying capcity
 
 off handidly set to 50/hectare based on something Brett said in a meeting.
+
+Changed to 20/hectare based on Wendy's PhD that combines juvenile and adult max densities.
+
+### Model fitting
+
+We will used mean squared difference to optimise our model paramters.
 
 ## Model parameters
 

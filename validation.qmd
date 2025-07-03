@@ -50,7 +50,7 @@ Selecting models with smallest difference in standard deviation.
 
 Distribution of parameter estimates from the top models
 
-![](./figures/environmental_parameter_estimation.png) \### The top 25 models
+### ![](./figures/environmental_parameter_estimation.png) The top 25 models
 
 The top 25 models were selected for the final parameter estimates
 
