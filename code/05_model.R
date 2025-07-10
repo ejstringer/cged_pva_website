@@ -17,7 +17,7 @@ em.initial.N <- function(init_A_SA,
   # summaries adult stable stages and juvenile stage
   adult.stages <- stage_distribution[-1] 
   adult.stages.proportion <- adult.stages/sum(adult.stages)
-  juv.stage <- stage_distribution[1]              
+  juv.stage <- stage_distribution[1] #0.35              
   
   # Calculate N
   total_N <- init_A_SA/(1-juv.stage)
@@ -197,15 +197,22 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
       #   }
       #   
       # }
-     
-      total <- colSums(N[, , yr, i])
+      
+      yearN <- N[, , yr, i]
+      
+      yearNstages <- sapply(1:ncol(yearN), function(x) rep(stages, yearN[,x]))
+      
+      total <- colSums(yearN)
    
       extra_N <- ifelse((total - K)>0, total - K, 0)
-      K_correct <- sapply(extra_N, function(x) table(factor(sample(stages, 
-                                                      size = x,
-                                                      replace = T), 
+      
+      
+      K_correct <- sapply(1:n_populations, 
+                          function(x) table(factor(sample(yearNstages[[x]], 
+                                                      size = extra_N[x],
+                                                      replace = F), 
                                                levels = stages)))
-      N[, , yr, i] <- unname(N[, , yr, i] - K_correct)
+      N[, , yr, i] <- N[, , yr, i] - unname(K_correct)
     
     }
     
