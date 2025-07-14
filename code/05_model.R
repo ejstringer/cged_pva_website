@@ -52,21 +52,20 @@ em.initial.Ngl <- function(gl, initial_popN, popname){
                                              nInd(glall), T),
                                 stage = glall@pop,
                                 pop = rep(popname, nInd(glall)),
-                                status = 'alive')
-  rel <- gl.grm(glall)
+                                status = 'alive',
+                                f = NA)
+ # rel <- gl.grm(glall, verbose = 0)
 
-  for (i in 1:nrow(rel)) glall@other$ind.metrics$f[i] <- rel[i,i] - 1
+ #  for (i in 1:nrow(rel)) glall@other$ind.metrics$f[i] <- rel[i,i] - 1
  
   return(glall)
 }
 
-em.gl.reproduce <- function(gl, mums, babies){
-  if (mums > 0) {
-    
- 
+em.gl.reproduce <- function(gl, xpop, mums, babies){
+  if(mums > 0){
   meta <- gl@other$ind.metrics
-  f_index <- which(meta$sex == 'female' & meta$stage != 'SA')
-  m_index <- which(meta$sex == 'male' & meta$stage != 'SA')
+  f_index <- which(meta$sex == 'female' & meta$stage != 'SA' & meta$pop == xpop)
+  m_index <- which(meta$sex == 'male' & meta$stage != 'SA' &  meta$pop == xpop)
   mum_index <- sample(f_index,mums)
   if(length(mum_index) != length(babies)) stop('fix mums and bubs!')
   glbabies <- list()
@@ -81,22 +80,16 @@ em.gl.reproduce <- function(gl, mums, babies){
   glJuvs <- do.call('rbind', glbabies)
   glJuvs@other$ind.metrics <- data.frame(sex = babysexes, 
                                          stage = 'J',
-                                         pop = gl@other$ind.metrics$pop[1],
+                                         pop = xpop,
                                          status = 'alive',
                                          f = NA)
   glJuvs
-  glall <- rbind(gl, glJuvs)
-  
-  glall@other$ind.metrics <- rbind(gl@other$ind.metrics, glJuvs@other$ind.metrics)
-  
-  rel <- gl.grm(glall)
-  
-  for (i in 1:nrow(rel)) glall@other$ind.metrics$f[i] <- rel[i,i] - 1
-  
+  pop(glJuvs) <- glJuvs@other$ind.metrics$pop
+
   }
-  if(mums == 0) glall <- gl
-  pop(glall)<- glall@other$ind.metrics$stage
-   return(glall)
+  if(mums == 0)  glJuvs <- NULL
+  
+   return(glJuvs)
 }
 
 # Function to determine clutch sizes of mothers
@@ -148,13 +141,15 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
   n_stages <- nrow(initial_abundance)
   n_populations <- ncol(initial_abundance)
   
+  
   if (length(f_reproducing) == 1) f_reproducing <- rep(f_reproducing, n_populations)
   
   # abundance array
   N <- array(dim = c(n_stages, n_populations, time_steps, replicates))
   N[, , 1, ] <- initial_abundance
   
-  
+  # genetics 
+  G <- array(dim = c(n_populations, time_steps, replicates))
   # survival adjustment for sites (calibration only)
   
   if(!is.null(site_adjust)){
@@ -175,18 +170,25 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
     snpspop <- seppop(snps)
     if(sum(!(names(snpspop) == populations))>0) stop('genlight pops do not match')
     
-    glN <- lapply(1:n_populations,
+    glN_init <- lapply(1:n_populations,
                   function(x) em.initial.Ngl(snpspop[[x]],
                                              initial_abundance[,x], 
                                              popname = populations[x]))
-    names(glN) <- populations
-    glN
-
+    names(glN_init) <- populations
+    glN <- do.call('rbind', glN_init)
+    glN_meta <- lapply(glN_init, function(x) x@other$ind.metrics)
+    glN@other$ind.metrics <- do.call('rbind', glN_meta)
+    
       }
   
   for (i in 1:replicates) {
+    if (GENETICS) {
+      he_start <- sapply(glN_init, function(x) mean(gl.He(x)))
+      G[, 1,i] <- he_start
+    }
+    
     for (yr in 2:time_steps) {
-      print('supp')
+      print(yr)
       Nprevious <- N[, , yr-1, i]
       ## supplementation -----
       if (supp) {
@@ -203,7 +205,7 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
       
       ## survival ---------
       ### environmental stoch (adults and SA) ---------------------------
-      print('sur')
+     
       survival_env <- survival
       survival_J_env <- survival_J
       if(!is.null(env_stoch)){
@@ -234,32 +236,34 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
         # demographic stochasitcity (binomial/bernoulli distribution)
         new.N <- sapply(1:length(prev.N), function(x) sum(rbinom(prev.N[x],1,surv[x])))
         N[, sites, yr, i] <- new.N
-          }
+      }
+      
+      gl_save <- glN
       # genetics survival
       if(GENETICS){
-      for (sites in 1:n_populations) {
-        if(!is.null(glN[[sites]])){
-      survivors <- N[, sites, yr, i]
+        print('surv')
+      for (sitename_gl in populations) {
+          xsites <- which(sitename_gl == populations)
+      survivors <- N[, xsites, yr, i]
       names(survivors) <- stages
-      diers <- N[, sites, yr-1, i] - survivors
-      glNpop <- glN[[sites]]
+      diers <- N[, xsites, yr-1, i] - survivors
+      glmeta <- glN@other$ind.metrics
       for (dd in 1:n_stages) {
         
-        sindex <- which(glNpop@other$ind.metrics$stage == stages[dd])
+        sindex <- which(glmeta$stage == stages[dd] & glmeta$pop == sitename_gl)
         
         sindexDead <- sindex[sample(1:length(sindex), diers[dd])]
-        glNpop@other$ind.metrics$status[sindexDead] <- 'dead'
+        glN@other$ind.metrics$status[sindexDead] <- 'dead'
         
       }
-      if('alive' %in% glNpop@other$ind.metrics$status){
-      glN[[sites]] <- glNpop[which(glNpop@other$ind.metrics$status == 'alive'),]
-      }else{
-        glN[[sites]] <- NULL
+    
+      glN <- glN[which(glN@other$ind.metrics$status == 'alive'),]
+      
+        
       }
-        }
       }
       ## transition ---------
-      print('trans')
+      print('start tran')
       new.tran <-  (transition_mat %*% N[, , yr, i])
       
       # Juvenile stage transition 
@@ -276,19 +280,20 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
       
       # Genetics
       if(GENETICS){
-        for (sites in 1:n_populations) {
-          if(!is.null(glN[[sites]])){
-          glNtran <- glN[[sites]]
-          new_stages <- glNtran@other$ind.metrics$stage
-          
-          
+        print('tra')
+        new_stages <- glN@other$ind.metrics$stage
+        glmeta <- glN@other$ind.metrics
+        
+        for (sitename_gl in populations) {
+            xsites <- which(sitename_gl == populations)
+            
           for (stran in stages) {
             
             stage_tran_mat <- transition_mat[,stran]
             newstage <- names(stage_tran_mat[stage_tran_mat>0])
-            current_stage <- which(glNtran@other$ind.metrics$stage==stran)
+            current_stage <- which(glmeta$stage==stran & glmeta$pop == sitename_gl)
             if(length(newstage)>1){
-              n_new_stage <- new.tran[stage_tran_mat>0,sites]
+              n_new_stage <- new.tran[stage_tran_mat>0,xsites]
               new_stages[current_stage] <- rep(newstage, n_new_stage)
             }
             
@@ -296,40 +301,70 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
             
             new_stages[current_stage] <- newstage 
             }
-            
-            
-            
+ 
           }
-          glNtran@other$ind.metrics$stage <- new_stages
-          glN[[sites]] <- glNtran
           
-          }
+          
         }
-        
+        glN@other$ind.metrics$stage <- new_stages
       }
       
       
       ## reproduction ---------
-      print('repro')
+      print('repo')
       females <- round(colSums(N[3:n_stages,,yr,i])/2)
+      
       if(GENETICS) {
-        
-       gfemales<- sapply(glN, function(x) table(x@other$ind.metrics$sex,
-                                      x@other$ind.metrics$stage)[1,])
-       females <- colSums(gfemales[rownames(gfemales) %in% stages[3:n_stages],])
+        glmeta <- glN@other$ind.metrics
+       gfemales<- sapply(populations[populations %in% glmeta$pop], 
+                         function(x) table(factor(glmeta$sex[glmeta$pop == x],
+                                                  levels = c('female', 'male')),
+                                      glmeta$stage[glmeta$pop == x])[1,])
+       index_fecund <- rownames(gfemales) %in% stages[3:n_stages]
+       if(ncol(gfemales)== 1){
+         gfemales_sum <-sum(gfemales[index_fecund,])
+         names(gfemales_sum) <- colnames(gfemales)
+       } 
+       if(ncol(gfemales) > 1) gfemales_sum <- colSums(gfemales[index_fecund,])
+
+       xpop_mothers <- which(populations %in% names(gfemales_sum))
+       females <- rep(0, n_populations)
+       females[xpop_mothers] <- gfemales_sum
+       print('females')
       }
+      
       mothers <- sapply(1:n_populations, 
                         function(x) sum(rbinom(females[x], 1, f_reproducing[x])))
       clutches <- lapply(mothers, em.juveniles, clutch_sizes)
       
       if(GENETICS){
+        glList <- list()
+        for (sitename_gl in populations) {
+            xsites <- which(sitename_gl == populations)
+            glmeta <- glN@other$ind.metrics
+            if(sitename_gl %in% populations[mothers>0]){
+         breeders <- glmeta$sex[glmeta$stage != 'SA' & glmeta$pop == sitename_gl]  
+         if('male' %in% breeders){ 
+         glNew <-  em.gl.reproduce(gl = glN,
+                                   xpop = sitename_gl,
+                          mums = mothers[xsites],
+                          babies = clutches[[xsites]])
+         
+         glList[[xsites]] <- glNew
+         print('juves list')
+         }
+            }
+           
+        }
+        glN_Juveniles <- do.call('rbind', glList)
+        glN_J_meta <- lapply(glList[!sapply(glList, is.null)],
+                             function(x) x@other$ind.metrics)
+        glN_Juveniles@other$ind.metrics <- do.call('rbind', glN_J_meta)
+        META <- glN@other$ind.metrics
+        glN <- rbind(glN, glN_Juveniles)
         
-           glNew <- lapply(1:n_populations,
-                                     function(x) em.gl.reproduce(gl = glN[[x]],
-                                                                 mums = mothers[x],
-                                                                 babies = clutches[[x]]))
-        
-        glN <- glNew
+        glN@other$ind.metrics <- rbind(META, glN_Juveniles@other$ind.metrics)
+        print('joins')
       }
       
       juvs <- sapply(clutches, sum)
@@ -372,30 +407,44 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
       
       # Genetics 
       if(GENETICS){
-        for(sites in 1:n_populations){
-          if(!is.null(glN[[sites]])){
-        glNK <- glN[[sites]]
-        Ksite <- K_correct[,sites]
+        for(sitename_gl in populations){
+    
+            xsites <- which(sitename_gl == populations)
+        glmeta <- glN@other$ind.metrics
+        Ksite <- K_correct[,xsites]
         for (xstage in 1:n_stages) {
-          sindex <- which(glNK@other$ind.metrics$stage == stages[xstage])
+          sindex <- which(glmeta$stage == stages[xstage] & glmeta$pop == sitename_gl)
           
           sindexDead <- sindex[sample(1:length(sindex), Ksite[xstage])]
-          glNK@other$ind.metrics$status[sindexDead] <- 'dead'
+          glN@other$ind.metrics$status[sindexDead] <- 'dead'
           
         }
-        glN[[sites]] <- glNK[which(glNK@other$ind.metrics$status == 'alive'),]
-          }
+        
+          
         }
+        glN <- glN[which(glN@other$ind.metrics$status == 'alive'),]
       }
       
       
-    print(yr)
+      if(GENETICS){
+        pop(glN) <- glN@other$ind.metrics$pop
+        glN_calc <- seppop(glN)
+        
+        he <- sapply(glN_calc, function(x) mean(gl.He(x)))
+        hepops <- which(populations %in% names(he))
+        G[hepops,yr, i] <- he
+      }
+    #print(yr)
+    #print(paste(sapply(glN, function(x) round(mean(gl.He(x)), 2)), collapse = '~'))
+    #print('f')
+    #print(paste(sapply(glN, function(x) round(mean(x@other$ind.metrics$f),2)), collapse = '~'))
     }
     
   }
 
-  return(N)
+  return(list(N = N, G = G))
 }
+
 
   
 
