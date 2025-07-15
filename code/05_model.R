@@ -62,6 +62,7 @@ em.initial.Ngl <- function(gl, initial_popN, popname){
 
  #  for (i in 1:nrow(rel)) glall@other$ind.metrics$f[i] <- rel[i,i] - 1
  
+  pop(glall) <- glall@other$ind.metrics$pop
   return(glall)
 }
 
@@ -182,6 +183,7 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
   N[, , 1, ] <- initial_abundance
   
   # genetics 
+  suppGENETICS <- GENETICS
   G <- array(dim = c(n_populations, time_steps, replicates))
   # survival adjustment for sites (calibration only)
   
@@ -236,7 +238,39 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
             # demographic stochasitcity (binomial/bernoulli distribution)
             new.N <- prev.N[stage.supp] + n.supp[sites]
             Nprevious[stage.supp,sites] <- new.N
+          
           }
+          
+          if(suppGENETICS){
+            
+            glsup <- gl.sim.ind(snps, n = sum(n.supp))
+            
+            glsup@other$ind.metrics <- data.frame(sex = sample(c('female', 'male'), 
+                                                               nInd(glsup), T),
+                                                  stage = stages[stage.supp],
+                                                  new_stage = NA,
+                                                  pop = rep(populations, n.supp),
+                                                  status = 'alive',
+                                                  mother = FALSE,
+                                                  eggs = NA,
+                                                  f = NA,
+                                                  year = yr)
+            pop(glsup) <- glsup@other$ind.metrics$pop
+            
+            if(GENETICS){
+            meta_notsupp <- glN@other$ind.metrics
+            glN <- rbind(glN, glsup)
+            glN@other$ind.metrics <- rbind(meta_notsupp, glsup@other$ind.metrics)
+            genetics_meta <- glN@other$ind.metrics
+            }
+            if(!GENETICS){
+              glN <- glsup
+              genetics_meta <- glN@other$ind.metrics
+              GENETICS <- TRUE
+            }
+          }
+          
+          
         }
       }
       
@@ -282,7 +316,9 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
       xsites <- which(sitename_gl == populations)
       survivors <- N[, xsites, yr, i]
       names(survivors) <- stages
-      diers <- N[, xsites, yr-1, i] - survivors
+  
+      
+      diers <- Nprevious[,xsites] - survivors
       
       for (dd in 1:n_stages) {
         
@@ -378,6 +414,8 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
                              genetics_meta$sex == 'female')
          
           successful_breeders <- sample(breeders, mothers[xsites])
+          if(length(breeders)==1) successful_breeders <- breeders
+          print(paste('length B', length(breeders)))
           genetics_meta$mother[successful_breeders] <- TRUE
           
           genetics_meta$eggs[successful_breeders] <- clutches[[xsites]]
@@ -538,6 +576,6 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
 }
 
 
-  
+
 
 
