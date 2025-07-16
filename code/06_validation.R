@@ -4,9 +4,11 @@ figprefix <- ''
 source('./code/00_libraries.R')
 source('./code/05_model.R')
 param_starting_estimates <- readRDS('./output/starting_values.rds')
+param_starting_estimates <- param_starting_estimates[,-ncol(param_starting_estimates)]
 stage_distribution <- readRDS('./output/stage_distribution.rds')
 transition_mat <- readRDS('./output/transition_matrix.rds')
 base_params <- readRDS('./output/base_parameters.rds')
+fper_repro <- base_params$fecundity
 K <- base_params$K
 clutch_sizes <- base_params$clutch
 survival_unlogit <- base_params$survival
@@ -24,7 +26,7 @@ topModels <- 100
 nrow(parameter_estimates[[1]])
 head(param_starting_estimates)
 
-
+n_cores <- 10
 # run model ---------------------------------------------------------------
 
 system.time({for (r in 1:length(no.runs)) {
@@ -51,11 +53,11 @@ N_sim <- mclapply(param_dist,
                                                  site_adjust = unlist(param[1,grep('adjust', colnames(param))]),
                                                  env_stoch = NULL, # sd on survival
                                                  transition_mat = transition_mat, # transition prob to SA
-                                                 f_reproducing = param$F_reproduction, # proportion of females reproducing
+                                                 f_reproducing = fper_repro,#param$F_reproduction, # proportion of females reproducing
                                                  clutch_sizes = clutch_sizes, # clutch size range   
                                                  K = K, # carrying capcity applied to adults and SA
                                                  time_steps = 11, # time
-                                                 replicates = 1), mc.cores = 10
+                                                 replicates = 1), mc.cores = n_cores 
 )
 print(paste('model', r, 'run'))
 ## model df ----------------------------------------------------------------

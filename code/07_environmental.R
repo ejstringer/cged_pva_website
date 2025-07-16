@@ -4,9 +4,11 @@ figprefix <- ''
 source('./code/00_libraries.R')
 source('./code/05_model.R')
 param_starting_estimates <- readRDS('./output/starting_values.rds')
+param_starting_estimates <- param_starting_estimates[,-ncol(param_starting_estimates)]
 stages <- names(readRDS('./output/stage_distribution.rds'))
 transition_mat <- readRDS('./output/transition_matrix.rds')
 base_params <- readRDS('./output/base_parameters.rds')
+fper_repro <- base_params$fecundity
 max_age <- base_params$age
 K <- base_params$K
 clutch_sizes <- base_params$clutch
@@ -22,7 +24,13 @@ n_real$ucl_all[n_real$N_all < 1 &n_real$ucl_all==0] <- n_real$N[n_real$N_all < 1
 
 # stage distribution ------------------------------------------------------
 
-fecundity <- (mean(param_selecteddf$mean[param_selecteddf$name == 'F_reproduction'])*0.5)*5.5 
+prob_clutch <- dbeta(seq(0.1,0.9, length.out = length(clutch_sizes)), 2,3)
+prob_clutch/sum(prob_clutch)
+
+mean_clutch <- round(mean(sample(clutch_sizes, 100000, T, prob_clutch)),1)
+
+
+fecundity <- fper_repro*0.5*mean_clutch#(mean(param_selecteddf$mean[param_selecteddf$name == 'F_reproduction'])*0.5)*5.5 
 ASAsur <- mean(param_selecteddf$mean[grep('survival_A', param_selecteddf$name)])
 Jt <- mean(param_selecteddf$mean[grep('survival_J', param_selecteddf$name)])
 
@@ -57,11 +65,11 @@ names(stage_distribution)<- stages
 # model inputs ------------------------------------------------------------
 top25 <- param_selecteddf
 paramlist <- list(populations = c('CA', 'JE', 'JW', 'MA'),
-                  initial_ab = round(top25$mean[2:5]), # adult abundance for populations
-                  survival = top25$mean[6:9], # survival of adults and SA at sites
-                  survival_J = top25$mean[10:13], # juvenile survival
+                  initial_ab = round(top25$mean[grep('N_', top25$name)]), # adult abundance for populations
+                  survival = top25$mean[grep('ASA_', top25$name)], # survival of adults and SA at sites
+                  survival_J = top25$mean[grep('_J_', top25$name)], # juvenile survival
                   #env_stoch = top25$mean[6:9], # sd on survival
-                  f_reproducing = top25$mean[1], # proportion of females reproducing
+                  f_reproducing = fper_repro, #top25$mean[1], # proportion of females reproducing
                   clutch_sizes = clutch_sizes, # clutch size range   
                   K = K # carrying capcity applied to adults and SA
 )
