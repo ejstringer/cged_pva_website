@@ -148,28 +148,28 @@ em.juveniles <- function(mothers, clutch_sizes){
 
 
 em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
-                             stages = c('J', 'SA','A1','A2','A3', 'A4'),
+                             stages = c('J', 'SA','A1','A2','A3'),
                              stage_distribution, 
-                             initial_ab, # adult abundance for populations
-                             survival, # survival of adults and SA at sites
-                             survival_J, # juvenile survival per site
-                             survival_logit_sd = NULL,
-                             site_adjust = NULL,
+                             initial_ab, 
+                             survival, 
+                             survival_J, 
+                             survival_logit_sd = NULL, # FOR MODEL FITTING
+                             site_adjust = NULL,       # FOR MODEL FITTING
                              env_stoch = NULL, # sd on survival
-                             transition_mat, # transition prob to SA
+                             transition_mat, 
                              f_reproducing, # proportion of females reproducing
-                             clutch_sizes, # clutch size range   
-                             K = K, # carrying capcity applied to adults and SA
+                             clutch_sizes,  
+                             K = K, 
                              time_steps = 8, # time
                              replicates = 1,
-                             supp = FALSE,
-                             n.supp = c(10,10,10,10),
+                             supp = FALSE,             # SUPPLEMENTATION
+                             n.supp = c(10,12,10,10),
                              stage.supp = 3,
                              when.supp = seq(2,5),
-                             GENETICS = FALSE,
+                             GENETICS = FALSE,         # GENETICS
                              snps){
   
-  ### initialise model ----
+  # initialise model ----------------
   # initial population sizes across stages and sites
   initial_abundance <- em.initial.N(initial_ab, stage_distribution, populations)
   n_stages <- nrow(initial_abundance)
@@ -227,7 +227,7 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
     }
     
     for (yr in 2:time_steps) {
-      print(yr)
+      #print(yr)
       Nprevious <- N[, , yr-1, i]
       ## supplementation -----
       if (supp) {
@@ -502,7 +502,7 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
       }
       
       
-      
+      ## checks ----
       if(GENETICS){
       # adults
       testA <-genetics_meta %>%
@@ -529,7 +529,7 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
               populations %in% names(testAJ)] <- as.matrix(testAJ[order(testA$new_stage),])
       
      
-      ## checks ----
+      
       if(sum(!(N[, , yr, i] == testMat))>0) stop('N not equal to nG')
       N[, , yr, i] == testMat
       N[, , yr, i]
@@ -537,7 +537,7 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
       
       }
       
-      ## Actual genetics ----
+      ## genetics -----
       if(GENETICS){
         print('genetics!!')
         glNsave <- glN
@@ -571,8 +571,12 @@ em.pva_simulator <- function(populations = c('CA', 'JE', 'JW', 'MA'),
     }
     
   }
+  out <- N
+  
+  
+  if(suppGENETICS) out<-list(N = N, G = G)
 
-  return(list(N = N, G = G))
+  return(out)
 }
 
 
