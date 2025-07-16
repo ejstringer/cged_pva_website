@@ -8,6 +8,7 @@ exotic <- vect('./data/grasslands/exotic_map.shp')
 
 
 # buffer around ntg (metres)
+# stevens et al. 2010 home range size = 2960m2 =~ 54m x 54m
 buffer_metres <- 0.01
 
 # site size ---------------------------------------------------------------

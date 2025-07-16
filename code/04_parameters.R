@@ -15,6 +15,13 @@ N_start <- n_sites %>%
   rename(n_grids = n) %>% 
   mutate(site = c('CA', 'JE', 'JW', 'MA'))
 
+# breeding
+mel2024 <- read.csv('./data/melbourn_zoo_tympo_breeding_2024.csv') %>% 
+  filter(complete.cases(Number.of.clutches))
+
+# K 
+caps <- read.csv('./data/N_estimates.csv')
+
 # replicates --------------------------------------------------------------
 
 reps <- 50000
@@ -80,12 +87,32 @@ transition  = 0.194
 
 clutch_sizes <- 3:7
 
-prob_clutch <- dbeta(seq(0.1,0.9, length.out = 5), 2,3)
+prob_clutch <- dbeta(seq(0.1,0.9, length.out = length(clutch_sizes)), 2,3)
 prob_clutch/sum(prob_clutch)
 
 mean_clutch <- mean(sample(clutch_sizes, 100000, T, prob_clutch))
 
 # reproductive females ----------------------------------------------------
+
+repro_fixed <- T # 0.65 from captive estimates
+
+# fixed
+femaleHatches <- mel2024 %>% 
+  group_by(Female) %>% 
+  summarise(n_clutches = sum(total.offspring.successfully.hatched))
+
+tb_mel <- table(femaleHatches$n_clutches)
+
+females2024 <- mel2024 %>% 
+  group_by(Female) %>% 
+  summarise(n_clutches = sum(Number.of.clutches))
+
+tb_mel <- table(females2024$n_clutches)
+
+
+mel_perc_repro <- 1 - (tb_mel[1]/sum(tb_mel))
+
+# not fixed 
 
 repro_lower <- 0
 repro_upper <- 1
@@ -97,7 +124,15 @@ reproduction <- (repro_lower + sample_data * (repro_upper - repro_lower))
 
 # carrying capacity -------------------------------------------------------
 
-K <- round(20*N_start$area_ha)
+# max density 
+max_density <- caps %>% 
+  group_by(site, year) %>% 
+  summarise(N = sum(N), n = n(), Ng = N/n()) %>%
+  arrange(desc(N)) %>% 
+  ungroup() %>% 
+  filter(Ng == max(Ng))
+
+K <- round(max_density$Ng*N_start$area_ha)
 names(K) <-  paste('K', N_start$site, sep = '_')
 
 
@@ -123,6 +158,7 @@ param_est <- cbind(initial_N,
                    #env_stochasticity
                    )
 
+if(repro_fixed) param_est[,'F_reproduction'] <- mel_perc_repro
 set.seed(54612)
 rownames(param_est) <- paste0(
   stri_rand_strings(nrow(sample_data), 4, "[A-Z]"),
@@ -175,13 +211,21 @@ parameter_table <- data.frame(site = N_start$site,
                                        'transition', 'reproduction','clutches',
                                        'environmental','K')),
          type = ifelse(parameter == 'N', 'variable', type)) %>% 
-  arrange(parameter)
-
-paramter_fxtb <- parameter_table %>% 
+  arrange(parameter)%>% 
   mutate(distribution = c(rep('truncated normal ', 4), 
                           'uniform/logit normal', rep('logit normal',2),
                           '', 'uniform', '~beta(2,3)', 'logit uniform',
-                          rep('',4))) %>% 
+                          rep('',4))) 
+if (repro_fixed) {
+  r_index <- parameter_table$parameter== 'reproduction'
+  parameter_table$value[r_index] <- round(mel_perc_repro, 3)
+  parameter_table$type[r_index]  <- 'fixed'
+  col_index <- which(colnames(parameter_table) %in% c('distribution',
+                                                      'lower','upper'))
+  parameter_table[r_index, col_index] <- ''
+
+}
+paramter_fxtb <- parameter_table %>% 
   flextable() %>% 
 autofit() %>%
   theme_zebra() %>% 
@@ -328,7 +372,8 @@ fx_transition %>%
 saveRDS(list(age = max_age, K = K, survival = survival_unlogit, 
              surv_sd = survival_logit_sd,
              transition = transition,
-             clutch = clutch_sizes, beta = c(2,3)), 
+             clutch = clutch_sizes, beta = c(2,3),
+             fecundity = mel_perc_repro), 
         './output/base_parameters.rds')
 
 
