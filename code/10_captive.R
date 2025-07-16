@@ -1,5 +1,6 @@
 
 source('code/00_libraries.R')
+library(survival)
 source('code/05_model.R')
 # load --------------------------------------------------------------------
 

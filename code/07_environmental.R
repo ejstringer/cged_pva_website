@@ -136,7 +136,7 @@ no.runs <- c(1,1,1,2,1)*10000
 topModels <- 100
 nrow(parameter_estimates[[1]])
 head(parameter_estimates[[1]])
-n_cores <- 5
+n_cores <- 10
 
 # run model ---------------------------------------------------------------
 

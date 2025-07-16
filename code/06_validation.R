@@ -40,7 +40,7 @@ system.time({for (r in 1:length(no.runs)) {
 
 param_dist <- split(as.data.frame(param_est), rownames(param_est))
 sapply(lapply(param_dist, function(param) param$env_stoch), class)
-N_sim <- lapply(param_dist, 
+N_sim <- mclapply(param_dist, 
                 function(param) em.pva_simulator(populations = c('CA', 'JE', 'JW', 'MA'),
                                                  stages = names(stage_distribution),
                                                  stage_distribution = stage_distribution, 
@@ -55,7 +55,7 @@ N_sim <- lapply(param_dist,
                                                  clutch_sizes = clutch_sizes, # clutch size range   
                                                  K = K, # carrying capcity applied to adults and SA
                                                  time_steps = 11, # time
-                                                 replicates = 1)
+                                                 replicates = 1), mc.cores = 10
 )
 print(paste('model', r, 'run'))
 ## model df ----------------------------------------------------------------
@@ -248,7 +248,8 @@ paramer_optermisation %>% filter(round != n_p,
         axis.text.y = element_blank(),
         axis.title.x = element_blank())
 
-ggsave(paste0('./figures/',figprefix, 'validation_parameter_estimation.png'),dpi = 300,
+ggsave(paste0('./figures/',figprefix, 
+              'validation_parameter_estimation.png'),dpi = 300,
        height = 7, width = 8, units = 'in')
 
 paramer_optermisation %>% filter(round == '6') %>% 

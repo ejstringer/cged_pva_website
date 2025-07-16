@@ -144,7 +144,7 @@ N_sim %>% length
 
 
 system.time(N_simulated <- mclapply(1:reps_base, em.extract_N, N_sim,
-                                    mc.cores = 5) %>% 
+                                    mc.cores = 10) %>% 
   do.call('rbind', .) %>% 
   mutate_if(is.character, factor))
 
@@ -184,7 +184,7 @@ extinction_prob
 sim_N_sum %>% 
   mutate(year = tstep +2012) %>% 
   ggplot(aes(year, N, group = rep))+
-  geom_hline(yintercept = 100, colour = 'red', lty = 2)+
+ # geom_hline(yintercept = 100, colour = 'red', lty = 2)+
   geom_line(alpha = 0.1, colour = 'grey50')+
   facet_wrap(~pop, scale = 'free')+
   theme_bw()+
