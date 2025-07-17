@@ -50,5 +50,9 @@ rsconnect/
 
 /.quarto/
 
+# relatedness
+EM_IBD_P
+EM_IBD_P_mpi
+
 
 

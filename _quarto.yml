@@ -16,6 +16,7 @@ website:
       - base_model.qmd
       - sensitivity.qmd
       - scenarios.qmd
+      - genetics.qmd
 
 format:
   html:

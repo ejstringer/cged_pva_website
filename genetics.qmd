@@ -1,0 +1,7 @@
+---
+title: "genetics"
+---
+
+I added genetics and simulated with and without yearly supplemention of 2, 10, 16, and 10 individuals for the four populations CA, JE, JW, and MA respectively.
+
+![](figures/genetics_heterozygosity_supplementation.png)
