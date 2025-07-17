@@ -10,13 +10,7 @@ title: "scenarios..."
 
 ### Supplementation
 
-We start by defining the number of individuals supplemented then distribute them systematically between sites, by selecting every possible combination within divisions of 6. For example, 100 would give us 0, 25, 50, 75, and 100 and then we would have every possible combination that would equal 100 across our four populations. The simplest combination would be supplement any of the populations with 100 and then 0 individuals supplemented to the other populations. But remember we just create every possible combination. Another would be 25 to each populations, summing to 100 individuals supplemented. 20 would give us 0, 4, 8, 12, 16, 20.
-
-We test combinations for total number of individuals supplemented for 20,40,60,80,100,200,300,400, 500, and 600.
-
-```{r}
-c(20,40,60,80,100,200,300,400, 500, 600)
-```
+We start tested supplementation of 1 to 200 animals annually. We ran 20,000 simulations repeating each supplementation 100 times.
 
 ![](figures/supplementation_440400_supp.png)
 
@@ -25,3 +19,21 @@ c(20,40,60,80,100,200,300,400, 500, 600)
 ![](figures/supplementation_2050_supp.png)
 
 ![](figures/supplementation_2050_supp_extprob.png)
+
+
+## Extinction risk
+
+![](/figures/supplementation_extinction_prob.png)
+
+![](figures/supplementation_extinction_prob_year.png)
+
+
+![](figures/supplementation_extinction_prob_gam.png)
+
+```{r}
+library(flextable)
+readRDS('./output/supplementation_extinct_prob_tbl.rds')
+
+```
+
+
