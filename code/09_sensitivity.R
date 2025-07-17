@@ -31,6 +31,7 @@ transition_mat <- readRDS('./output/transition_matrix.rds')
 # K <- readRDS('./output/carrying_capcity.rds')
 # clutch_sizes <- 4:7
 base_params <- readRDS('./output/base_parameters.rds')
+fper_repro <- base_params$fecundity
 max_age <- base_params$age
 K <- base_params$K
 clutch_sizes <- base_params$clutch
@@ -39,14 +40,13 @@ transition <- base_params$transition
 param_selected <- readRDS('./output/selected_25models_parameters.RDS')
 param_selecteddf <-readRDS('./output/selected_25models_parameters_df.RDS')
 # stage distribution ------------------------------------------------------
+prob_clutch <- dbeta(seq(0.1,0.9, length.out = length(clutch_sizes)), 2,3)
+prob_clutch/sum(prob_clutch)
+
+mean_clutch <- round(mean(sample(clutch_sizes, 100000, T, prob_clutch)),1)
 
 
-
-# fecundity <- (mean(param_selected[,'F_reproduction'])*0.5)*5.5 
-# ASAsur <- mean(param_selected[,grep('survival_A', colnames(param_selected))])
-# Jt <- mean(param_selected[,'survival_juv'])
-
-fecundity <- (mean(param_selecteddf$mean[param_selecteddf$name == 'F_reproduction'])*0.5)*mean(clutch_sizes)
+fecundity <- fper_repro*0.5*mean_clutch
 ASAsur_site <- (param_selecteddf$mean[grep('survival_A', param_selecteddf$name)])
 Jt_site <- (param_selecteddf$mean[grep('survival_J', param_selecteddf$name)])
 
@@ -198,7 +198,7 @@ ggsave(paste0('./figures/', 'sensitivity_lambda_diff.png'),
 
 # average across sites ----------------------------------------------------
 
-fecundity <- (mean(param_selecteddf$mean[param_selecteddf$name == 'F_reproduction'])*0.5)*mean(clutch_sizes)
+fecundity #<- (mean(param_selecteddf$mean[param_selecteddf$name == 'F_reproduction'])*0.5)*mean(clutch_sizes)
 ASAsur<- mean(param_selecteddf$mean[grep('survival_A', param_selecteddf$name)])
 Jt<- mean(param_selecteddf$mean[grep('survival_J', param_selecteddf$name)])
 

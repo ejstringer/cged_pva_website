@@ -366,7 +366,7 @@ plot(gam_supp$residuals)
                                  pop = rep(levels(ext_data$pop), 
                                            each = length(xx)))
   pred_extdata$ext_p <- predict(gam_supp, newdata = pred_extdata)   
-
+### flextable ---------
 extinction_table <-  pred_extdata %>% 
     mutate(ext_p2 = round(ext_p, 2)) %>% 
     filter(ext_p2 <= 0.1) %>% 
@@ -384,7 +384,9 @@ extinction_table %>%
   hline(part = 'header', border = fp_border_default(width = 2)) %>% 
   vline(j = 1, part = 'body', border = fp_border_default(width = 1.5)) %>% 
   bold(part = 'header') %>% 
-  font(part = 'all', fontname='calibri') -> ext_fltb;ext_fltb
+  font(part = 'all', fontname='calibri') %>% 
+  bg(j = 1,bg = 'grey90') %>% 
+  bg(part = 'header',bg = 'grey90') -> ext_fltb;ext_fltb
 
 saveRDS(ext_fltb, './output/supplementation_extinct_prob_tbl.rds') 
   

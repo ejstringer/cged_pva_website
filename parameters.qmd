@@ -44,7 +44,7 @@ Tried to use NDVI and LST but did not have enough predictive power - so envrionm
 
 off handidly set to 50/hectare based on something Brett said in a meeting.
 
-Changed to 20/hectare based on Wendy's PhD that combines juvenile and adult max densities.
+Changed to 60/hectare based on max abundance estimates from 2006 at JW
 
 ### Model fitting
 
