@@ -36,3 +36,7 @@ fx_basepara
 ## EXTINCTION PROBABILITY
 
 ![](./figures/base_model_extinction.png)
+
+## NDVI and LST
+
+![](figures/habitat_survival_relationship2.png)

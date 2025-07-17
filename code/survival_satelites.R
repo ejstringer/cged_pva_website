@@ -16,7 +16,7 @@ mean_sat <- satelite %>% group_by(new_site) %>%
             n = n()) %>% 
   mutate(sur = phiASA,
          surJ = phiJ,
-         logitsur = logit(sur),
+         logitsur = logit(surJ),
          lwr = both - se*1.96,
          upr = both + se*1.96) 
   ggplot(mean_sat,aes(ndvi, lst, colour = new_site))+
@@ -36,15 +36,14 @@ mean_sat <- satelite %>% group_by(new_site) %>%
     theme(legend.position = 'inside',
           legend.position.inside = c(0.2, 0.2),
           legend.background = element_rect(colour = 'grey'))
-    
-  m <- lm(logitsur ~ both, data = mean_sat)
- 
+
   cor(mean_sat$logitsur, mean_sat$lst)
   
   cor(mean_sat$logitsur, mean_sat$both)
 
   
   cor(mean_sat$logitsur, mean_sat$ndvi)
+  lm(logitsur ~ both, data = mean_sat) %>% summary
   lm(logitsur ~ ndvi + lst, data = mean_sat) %>% summary
   
   x <- seq(-0.5,0.5, 0.001)
@@ -53,7 +52,7 @@ mean_sat <- satelite %>% group_by(new_site) %>%
   survival_habitat<-  data.frame(ndvi = x/2, lst = x/2, both = x, logitsur = y, sur = unlogit(y),
              lt = 'dashed') %>%
     mutate(lt = ifelse(both > min(mean_sat$both),
-                      'solid', lt),
+                      'dashed', lt),
            lt = ifelse(both > max(mean_sat$both), 'dotted', lt)) %>% 
     ggplot(aes(lst+ndvi, sur))+
     geom_line(aes(linetype = lt), show.legend = F)+
@@ -62,15 +61,14 @@ mean_sat <- satelite %>% group_by(new_site) %>%
     theme_bw()+
     xlab('NDVI + LST (scaled)')+
     ylab('Adult Survival')+
+    geom_hline(yintercept = c(0,1), colour = 'grey', linewidth = 0.25)+
     labs(colour = 'Grassland')+
     theme(legend.position = 'inside',
           legend.position.inside = c(0.85, 0.7),
           legend.background = element_rect(colour = 'grey'),
-          panel.grid = element_blank())+
-    geom_hline(yintercept = c(0,1), colour = 'grey', 
-               linewidth = 0.25);survival_habitat
+          panel.grid = element_blank());survival_habitat
   
-  ggsave('./figures/habitat_survival_relationship.png', plot = survival_habitat,
+  ggsave('./figures/habitat_survival_relationship2.png', plot = survival_habitat,
          width = 5, height = 3)
 
 
@@ -86,7 +84,7 @@ mean_sat <- satelite %>% group_by(new_site) %>%
     mutate(logitsur = logit(sur)) 
    
    
-    ggplot(sat_dat,aes(both_scaled, sur, colour= new_site))+
+    ggplot(sat_dat,aes(both_scaled, logitsur, colour= new_site))+
     geom_point(alpha = 0.5)+
     geom_point(data = mean_sat, aes(x = both, fill = new_site), size = 4,
                colour = 'black', pch = 21)+
@@ -99,6 +97,8 @@ mean_sat <- satelite %>% group_by(new_site) %>%
   sapply(1:5, function(x) plot(mm, which = x))
 
   mm <- lm(logitsur ~ LST_scales + NDVI_scales, data = sat_dat)
+  summary(mm)
+  
   
   lmer(both_scaled~ logitsur + (1|new_site), data = sat_dat) %>% summary
   mmboth <- lm(logitsur ~ both_scaled, data = sat_dat) 
@@ -160,7 +160,7 @@ satelite %>%
   )
   ggforce::geom_mark_ellipse(aes(fill = factor(new_site)))
 
-mean_sat %>% ggplot(aes(ndvi, sur, colour = new_site))+
+mean_sat %>% ggplot(aes(ndvi+lst, sur, colour = new_site))+
   geom_point(size = 3)+
   theme_classic()
 
